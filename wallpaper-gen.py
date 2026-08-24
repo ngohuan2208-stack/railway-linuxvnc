@@ -1,39 +1,47 @@
 #!/usr/bin/env python3
-"""Generate a gradient wallpaper for XFCE desktop."""
+"""Generate a gradient wallpaper (fast, bytearray)."""
 import os
-import sys
 import struct
+import sys
 import zlib
 
-def create_png(width, height, pixels):
+
+def create_png(width, height):
     def chunk(ctype, data):
         c = ctype + data
-        crc = struct.pack(">I", zlib.crc32(c) & 0xffffffff)
-        return struct.pack(">I", len(data)) + c + crc
+        return struct.pack(">I", len(data)) + c + struct.pack(
+            ">I", zlib.crc32(c) & 0xffffffff
+        )
 
-    header = b"\x89PNG\r\n\x1a\n"
-    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    # precompute per-x base colors
+    xs = []
+    for x in range(width):
+        fx = x / width
+        xs.append((int(10 + fx * 20), int(12 + fx * 8), int(30 + fx * 20)))
 
-    raw = b""
+    raw = bytearray()
     for y in range(height):
-        raw += b"\x00"
-        for x in range(width):
-            r = int(10 + (x / width) * 20)
-            g = int(12 + (y / height) * 18)
-            b = int(30 + ((x + y) / (width + height)) * 35)
-            raw += bytes([min(r, 255), min(g, 255), min(b, 255)])
+        fy = y / height
+        gy = int(fy * 10)
+        gb = int(fy * 15)
+        raw.append(0)
+        for r, g, b in xs:
+            raw += bytes((r, g + gy, min(b + gb, 255)))
 
-    idat = chunk(b"IDAT", zlib.compress(raw, 9))
-    iend = chunk(b"IEND", b"")
-    return header + ihdr + idat + iend
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(bytes(raw), 6))
+        + chunk(b"IEND", b"")
+    )
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "/home/user/.wallpapers/default.png"
-    w = int(sys.argv[2]) if len(sys.argv) > 2 else 1920
-    h = int(sys.argv[3]) if len(sys.argv) > 3 else 1080
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    data = create_png(w, h, None)
+    out = sys.argv[1] if len(sys.argv) > 1 else "/opt/wallpaper.png"
+    w = int(sys.argv[2]) if len(sys.argv) > 2 else 1600
+    h = int(sys.argv[3]) if len(sys.argv) > 3 else 900
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+    data = create_png(w, h)
     with open(out, "wb") as f:
         f.write(data)
     print(f"Wallpaper: {out} ({w}x{h}, {len(data)} bytes)")
