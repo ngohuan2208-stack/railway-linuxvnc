@@ -9,7 +9,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LANGUAGE=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    MALLOC_ARENA_MAX=2
+    MALLOC_ARENA_MAX=2 \
+    CODE_SERVER_PORT=8443
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
@@ -20,11 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tigervnc-standalone-server tigervnc-common tigervnc-tools \
     novnc websockify \
     firefox-esr \
-    rclone htop \
+    rclone htop florence \
     sudo zip unzip p7zip-full \
-    fonts-dejavu-core tzdata \
+    fonts-dejavu-core tzdata net-tools iw \
     bash git curl wget nano procps ca-certificates \
-    python3 python3-pip python3-requests \
+    python3 python3-pip python3-requests python3-psutil python3-aiohttp \
     && pip3 install --no-cache-dir --break-system-packages gdown \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,19 +33,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl -fsSL https://code-server.dev/install.sh | sh
+
 RUN useradd -m -d /home/user -s /bin/bash user \
     && echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user \
     && chmod 0440 /etc/sudoers.d/user
 
-RUN mkdir -p /home/user/{Desktop,Documents,Downloads,.config,.cache,.vnc,.backups,Drive}
+RUN mkdir -p /home/user/{Desktop,Documents,Downloads,.config,.cache,.vnc,.backups,Drive,.local/share/code-server}
 
 COPY scripts/ /usr/local/bin/
-RUN chmod +x /usr/local/bin/backup-data /usr/local/bin/restore-data \
-    /usr/local/bin/autobackup-loop \
-    /usr/local/bin/drive-setup /usr/local/bin/drive-push \
-    /usr/local/bin/drive-pull /usr/local/bin/drive-mount
+RUN chmod +x /usr/local/bin/*
 
-COPY novnc-index.html /usr/share/novnc/index.html
+COPY http-server.py /usr/local/bin/http-server.py
+COPY index.html /srv/index.html
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh

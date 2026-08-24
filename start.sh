@@ -10,7 +10,7 @@ AUTO_BACKUP=${AUTO_BACKUP:-1}
 BACKUP_INTERVAL_MIN=${BACKUP_INTERVAL_MIN:-30}
 AUTO_BACKUP_ON_EXIT=${AUTO_BACKUP_ON_EXIT:-1}
 
-echo "=== Linux Desktop (XFCE + noVNC) ==="
+echo "=== Linux Desktop (XFCE + noVNC + VS Code) ==="
 echo "PORT=$PORT RES=$RESOLUTION DEPTH=$VNC_DEPTH"
 
 if [ -n "$TZ" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
@@ -24,7 +24,7 @@ if ! id user >/dev/null 2>&1; then
     chmod 0440 /etc/sudoers.d/user
 fi
 
-mkdir -p /home/user/{Desktop,Documents,Downloads,.config,.cache,.vnc,.backups,Drive}
+mkdir -p /home/user/{Desktop,Documents,Downloads,.config,.cache,.vnc,.backups,Drive,.local/share/code-server}
 echo "$VNC_PASSWORD" | vncpasswd -f > /home/user/.vnc/passwd
 chmod 600 /home/user/.vnc/passwd
 
@@ -57,6 +57,24 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xm
   </property>
 </channel>
 XFPM
+
+mkdir -p /home/user/.config/florence
+cat > /home/user/.config/florence/florence.conf << 'FLORENCE'
+[keyboard]
+width=800
+height=220
+opacity=0.9
+theme=default
+[FLORENCE]
+startHidden=true
+FLORENCE
+
+mkdir -p /home/user/.config/code-server
+cat > /home/user/.config/code-server/config.yaml << 'CODESERVER'
+bind-addr: 0.0.0.0:8443
+auth: none
+cert: false
+CODESERVER
 
 chown -R user:user /home/user/.vnc
 chown -R user:user /home/user/.config

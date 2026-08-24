@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Linux Desktop</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e17;--panel:#111827;--border:#1e293b;--text:#e2e8f0;--dim:#64748b;--accent:#3b82f6;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4}
+body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex}
+#sidebar{width:260px;min-width:260px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.header .logo{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
+.header .status{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.section-title{font-size:9px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.section-title svg{width:12px;height:12px;fill:currentColor;opacity:.6}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px}
+.stat-label{color:var(--dim)}
+.stat-value{color:var(--text);font-weight:500}
+.stat-value.ok{color:var(--green)}
+.stat-value.warn{color:var(--amber)}
+.stat-value.danger{color:var(--red)}
+.bar-bg{height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.bar-fill.ok{background:var(--green)}
+.bar-fill.warn{background:var(--amber)}
+.bar-fill.danger{background:var(--red)}
+.net-icon{display:flex;align-items:center;gap:4px}
+.wifi-badge{display:inline-flex;align-items:center;gap:3px;background:var(--border);padding:1px 6px;border-radius:4px;font-size:9px;color:var(--green)}
+.tools{padding:10px 14px;border-top:1px solid var(--border);margin-top:auto}
+.tool-btn{width:100%;padding:8px;margin-bottom:4px;background:var(--border);border:1px solid transparent;border-radius:6px;color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s}
+.tool-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tool-btn.active{background:var(--accent);color:#fff}
+.tool-btn svg{width:14px;height:14px;fill:currentColor}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#vnc-frame{flex:1;border:none;background:#000}
+@media(max-width:768px){
+#sidebar{display:none}
+body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left:0;top:0}
+#menu-toggle{display:flex!important}
+}
+#menu-toggle{display:none;position:fixed;top:8px;left:8px;z-index:50;width:36px;height:36px;background:var(--panel);border:1px solid var(--border);border-radius:8px;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+#florence-overlay{display:none;position:fixed;bottom:0;left:0;right:0;height:220px;z-index:200;background:rgba(0,0,0,.9);border-top:2px solid var(--accent)}
+#florence-overlay iframe{width:100%;height:100%;border:none}
+#florence-overlay.show{display:block}
+</style>
+</head>
+<body>
+
+<div id="menu-toggle" onclick="document.body.classList.toggle('menu-open')">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+</div>
+
+<div id="sidebar">
+  <div class="header">
+    <span class="logo">Linux Desktop</span>
+    <span class="status"></span>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+      CPU
+    </div>
+    <div class="stat-row"><span class="stat-label">Usage</span><span class="stat-value" id="cpu-pct">--</span></div>
+    <div class="bar-bg"><div class="bar-fill ok" id="cpu-bar" style="width:0%"></div></div>
+    <div class="stat-row"><span class="stat-label">Cores</span><span class="stat-value" id="cpu-count">--</span></div>
+    <div class="stat-row"><span class="stat-label">Freq</span><span class="stat-value" id="cpu-freq">--</span></div>
+    <div class="stat-row"><span class="stat-label">Load</span><span class="stat-value" id="cpu-load">--</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+      RAM
+    </div>
+    <div class="stat-row"><span class="stat-label">Usage</span><span class="stat-value" id="mem-pct">--</span></div>
+    <div class="bar-bg"><div class="bar-fill ok" id="mem-bar" style="width:0%"></div></div>
+    <div class="stat-row"><span class="stat-label">Used</span><span class="stat-value" id="mem-used">--</span></div>
+    <div class="stat-row"><span class="stat-label">Total</span><span class="stat-value" id="mem-total">--</span></div>
+    <div class="stat-row"><span class="stat-label">Swap</span><span class="stat-value" id="swap-info">--</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M20 6H4v12h16V6zm-2 8H6v-2h12v2z"/></svg>
+      Disk
+    </div>
+    <div class="stat-row"><span class="stat-label">Usage</span><span class="stat-value" id="disk-pct">--</span></div>
+    <div class="bar-bg"><div class="bar-fill ok" id="disk-bar" style="width:0%"></div></div>
+    <div class="stat-row"><span class="stat-label">Used</span><span class="stat-value" id="disk-used">--</span></div>
+    <div class="stat-row"><span class="stat-label">Total</span><span class="stat-value" id="disk-total">--</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+      Network
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">WiFi</span>
+      <span class="stat-value" id="wifi-status">--</span>
+    </div>
+    <div class="stat-row"><span class="stat-label">Sent</span><span class="stat-value" id="net-sent">--</span></div>
+    <div class="stat-row"><span class="stat-label">Recv</span><span class="stat-value" id="net-recv">--</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      System
+    </div>
+    <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value" id="sys-uptime">--</span></div>
+    <div class="stat-row"><span class="stat-label">Processes</span><span class="stat-value" id="sys-procs">--</span></div>
+    <div class="stat-row"><span class="stat-label">Time</span><span class="stat-value" id="sys-time">--</span></div>
+  </div>
+
+  <div class="tools">
+    <button class="tool-btn" id="btn-keyboard" onclick="toggleKeyboard()">
+      <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
+      Bàn phím
+    </button>
+    <button class="tool-btn" onclick="openVSCode()">
+      <svg viewBox="0 0 24 24"><path d="M17.59 3.59c-.38-.38-.89-.59-1.42-.59H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6.83c0-.53-.21-1.04-.59-1.41l-1.82-1.83zM15 18H9v-2h6v2zm3-6H9V8h9v4z"/></svg>
+      VS Code
+    </button>
+    <button class="tool-btn" onclick="openTerminal()">
+      <svg viewBox="0 0 24 24"><path d="M20 19.59V8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c.45 0 .85-.15 1.19-.4l-4.43-4.43c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L20 19.59z"/></svg>
+      Terminal
+    </button>
+  </div>
+</div>
+
+<div id="main">
+  <iframe id="vnc-frame" src="/novnc/vnc.html?autoconnect=true&resize=scale&quality=6&compression=20&reconnect=true&reconnect_delay=2000"></iframe>
+</div>
+
+<div id="florence-overlay">
+  <iframe id="florence-frame" src="about:blank"></iframe>
+</div>
+
+<script>
+function fmt(b){
+  for(var u of['B','KB','MB','GB','TB']){if(b<1024)return b.toFixed(1)+' '+u;b/=1024}return b.toFixed(1)+' PB';
+}
+function cls(p){return p>85?'danger':p>60?'warn':'ok'}
+function upd(){
+  fetch('/api/stats').then(r=>r.json()).then(d=>{
+    var e;
+    e=document.getElementById('cpu-pct');e.textContent=d.cpu_percent+'%';e.className='stat-value '+cls(d.cpu_percent);
+    document.getElementById('cpu-bar').style.width=d.cpu_percent+'%';
+    document.getElementById('cpu-bar').className='bar-fill '+cls(d.cpu_percent);
+    document.getElementById('cpu-count').textContent=d.cpu_count;
+    document.getElementById('cpu-freq').textContent=d.cpu_freq+' MHz';
+    document.getElementById('cpu-load').textContent=d.load_1+' / '+d.load_5+' / '+d.load_15;
+
+    e=document.getElementById('mem-pct');e.textContent=d.mem_percent+'%';e.className='stat-value '+cls(d.mem_percent);
+    document.getElementById('mem-bar').style.width=d.mem_percent+'%';
+    document.getElementById('mem-bar').className='bar-fill '+cls(d.mem_percent);
+    document.getElementById('mem-used').textContent=fmt(d.mem_used);
+    document.getElementById('mem-total').textContent=fmt(d.mem_total);
+    document.getElementById('swap-info').textContent=fmt(d.swap_used)+' / '+fmt(d.swap_total);
+
+    e=document.getElementById('disk-pct');e.textContent=d.disk_percent+'%';e.className='stat-value '+cls(d.disk_percent);
+    document.getElementById('disk-bar').style.width=d.disk_percent+'%';
+    document.getElementById('disk-bar').className='bar-fill '+cls(d.disk_percent);
+    document.getElementById('disk-used').textContent=fmt(d.disk_used);
+    document.getElementById('disk-total').textContent=fmt(d.disk_total);
+
+    e=document.getElementById('wifi-status');
+    if(d.wifi){e.innerHTML='<span class="wifi-badge">● '+d.wifi+'</span>'}else{e.textContent='Ethernet'}
+    document.getElementById('net-sent').textContent=fmt(d.net_sent);
+    document.getElementById('net-recv').textContent=fmt(d.net_recv);
+
+    document.getElementById('sys-uptime').textContent=d.uptime;
+    document.getElementById('sys-procs').textContent=d.processes;
+    document.getElementById('sys-time').textContent=new Date().toLocaleTimeString();
+  }).catch(()=>{});
+}
+upd();setInterval(upd,2000);
+
+var kbVisible=false;
+function toggleKeyboard(){
+  kbVisible=!kbVisible;
+  var o=document.getElementById('florence-overlay');
+  var f=document.getElementById('florence-frame');
+  var b=document.getElementById('btn-keyboard');
+  if(kbVisible){
+    o.classList.add('show');
+    b.classList.add('active');
+    f.src='/novnc/florence.html';
+  }else{
+    o.classList.remove('show');
+    b.classList.remove('active');
+    f.src='about:blank';
+  }
+}
+function openVSCode(){
+  window.open('/code-server/','_blank');
+}
+function openTerminal(){
+  var f=document.getElementById('vnc-frame');
+  f.contentWindow.postMessage({type:'xfce-terminal'},'*');
+}
+</script>
+</body>
+</html>
