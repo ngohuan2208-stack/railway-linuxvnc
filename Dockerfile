@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tigervnc-standalone-server tigervnc-common tigervnc-tools \
     novnc websockify \
     firefox-esr \
-    rclone htop florence \
+    rclone htop florence xprintidle xdotool \
     sudo zip unzip p7zip-full \
     fonts-dejavu-core tzdata net-tools iw \
     bash git curl wget nano procps ca-certificates \
@@ -45,6 +45,7 @@ COPY scripts/ /usr/local/bin/
 RUN chmod +x /usr/local/bin/*
 
 COPY http-server.py /usr/local/bin/http-server.py
+COPY idle-monitor.py /usr/local/bin/idle-monitor.py
 COPY index.html /srv/index.html
 
 COPY start.sh /start.sh

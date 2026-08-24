@@ -4,10 +4,11 @@ Desktop Linux nhẹ, chạy trên trình duyệt web với sidebar theo dõi h�
 
 ## Giao diện
 
-- **Sidebar trái** — CPU, RAM, Disk, WiFi, Network, Uptime
+- **Sidebar trái** — CPU, RAM, Disk, WiFi, Network, Idle time, Sleep status
 - **Bàn phím ảo** — Florence virtual keyboard, toggle bằng nút
 - **VS Code** — code-server (VS Code web), mở tab mới
 - **Desktop** — XFCE4 qua noVNC, auto-connect
+- **Auto-sleep** — Tự động tắt desktop khi idle, tiết kiệm RAM
 
 ## Cài đặt công cụ
 
@@ -53,9 +54,38 @@ Desktop Linux nhẹ, chạy trên trình duyệt web với sidebar theo dõi h�
 | `RESOLUTION` | `1600x900` | Độ phân giải |
 | `VNC_DEPTH` | `24` | Số bit màu (16=ít RAM hơn, 24=nét hơn) |
 | `TZ` | _(trống)_ | Múi giờ (VD: `Asia/Ho_Chi_Minh`) |
+| `IDLE_TIMEOUT` | `300` | Giây trước khi auto-sleep (5 phút) |
+| `IDLE_CHECK` | `10` | Giây giữa các lần kiểm tra idle |
+| `DROP_CACHE` | `1` | Tự động drop page cache khi sleep (0=off) |
 | `AUTO_BACKUP` | `1` | Tự động backup định kỳ |
 | `BACKUP_INTERVAL_MIN` | `30` | Phút giữa các lần backup |
 | `AUTO_BACKUP_ON_EXIT` | `1` | Backup khi tắt máy |
+
+## Auto-Sleep (Tiết kiệm RAM cực đại)
+
+Khi không hoạt động超过 `IDLE_TIMEOUT` giây:
+
+1. **Desktop XFCE4 dừng** → giải phóng ~100-200MB RAM
+2. **Page cache drop** → giải phóng thêm ~50-200MB RAM
+3. **VNC server giữ kết nối** → sẵn sàng wake khi có input
+
+Khi di chuyển chuột/phím (idle < 5s):
+- Desktop tự động restart
+-各件回到 trạng thái bình thường
+
+### RAM tiết kiệm
+| Trạng thái | RAM sử dụng |
+|-----------|------------|
+| Desktop active | ~200-300MB |
+| Desktop sleeping | ~50-100MB |
+| **Tiết kiệm** | **~100-250MB** |
+
+### Cấu hình
+```bash
+IDLE_TIMEOUT=300    # 5 phút idle → sleep
+IDLE_CHECK=10       # Kiểm tra mỗi 10 giây
+DROP_CACHE=1        # Drop page cache khi sleep
+```
 
 ## Sidebar Stats
 
@@ -65,7 +95,7 @@ Sidebar hiển thị realtime:
 - **Disk**: Usage %, Used/Total
 - **WiFi**: SSID + signal strength (nếu có)
 - **Network**: Sent/Recv total bytes
-- **System**: Uptime, Processes, Clock
+- **System**: Uptime, Processes, Idle time, Sleep status, Clock
 
 Cập nhật mỗi 2 giây qua API `/api/stats`.
 
@@ -116,14 +146,24 @@ backup-data
 restore-data
 ```
 
-## Tiết kiệm RAM
+## Tiết kiệm RAM (Tổng hợp)
 
+### Tối ưu runtime
 - **VNC_DEPTH=16** — Giảm 1/3 RAM framebuffer
 - **RESOLUTION nhỏ** — Giảm RAM VNC (VD: `1280x720`)
 - **XFCE compositor tắt** — Tiết kiệm RAM GPU
 - **MALLOC_ARENA_MAX=2** — Giảm bộ nhớ glibc
 - **Firefox** — Chỉ dùng RAM khi mở, không chạy nền
-- **IDLE RAM**: ~200-300MB (sidebar + desktop)
+
+### Auto-sleep
+- **IDLE_TIMEOUT** — Tự động sleep desktop khi idle
+- **DROP_CACHE** — Drop page cache khi sleep
+- **RAM trung bình**: ~50-100MB khi sleep
+
+### IDLE RAM
+- Desktop active: ~200-300MB
+- Desktop sleeping: ~50-100MB
+- **Tiết kiệm tối đa**: ~250MB
 
 ## Kiến trúc
 
@@ -133,5 +173,6 @@ restore-data
 - **Web**: Python HTTP server (noVNC proxy + stats API)
 - **IDE**: code-server (VS Code web)
 - **Virtual Keyboard**: Florence
+- **Idle Monitor**: xprintidle + Python (auto-sleep)
 - **Process Manager**: supervisord
 - **Backup**: tar + symlink, tự động mỗi 30 phút

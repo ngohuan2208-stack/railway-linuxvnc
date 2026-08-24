@@ -116,6 +116,8 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
     </div>
     <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value" id="sys-uptime">--</span></div>
     <div class="stat-row"><span class="stat-label">Processes</span><span class="stat-value" id="sys-procs">--</span></div>
+    <div class="stat-row"><span class="stat-label">Idle</span><span class="stat-value" id="sys-idle">--</span></div>
+    <div class="stat-row"><span class="stat-label">Sleep</span><span class="stat-value" id="sys-sleep">--</span></div>
     <div class="stat-row"><span class="stat-label">Time</span><span class="stat-value" id="sys-time">--</span></div>
   </div>
 
@@ -178,6 +180,13 @@ function upd(){
 
     document.getElementById('sys-uptime').textContent=d.uptime;
     document.getElementById('sys-procs').textContent=d.processes;
+    var idleS=Math.round(d.idle_ms/1000);
+    var idleMin=Math.floor(idleS/60);
+    var idleSec=idleS%60;
+    document.getElementById('sys-idle').textContent=idleMin+'m '+idleSec+'s';
+    var sl=document.getElementById('sys-sleep');
+    if(d.suspended){sl.textContent='SLEEPING';sl.className='stat-value danger'}
+    else{sl.textContent='ACTIVE';sl.className='stat-value ok'}
     document.getElementById('sys-time').textContent=new Date().toLocaleTimeString();
   }).catch(()=>{});
 }

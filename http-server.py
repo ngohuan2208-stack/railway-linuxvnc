@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -56,6 +57,18 @@ def collect_stats():
 
     procs = len(psutil.pids())
 
+    idle_ms = 0
+    suspended = os.path.exists("/tmp/desktop_suspended")
+    try:
+        idle_out = subprocess.check_output(
+            ["/usr/bin/xprintidle"],
+            env={"DISPLAY": os.environ.get("DISPLAY", ":1")},
+            timeout=3,
+        )
+        idle_ms = int(idle_out.strip())
+    except Exception:
+        pass
+
     stats = {
         "cpu_percent": psutil.cpu_percent(interval=0),
         "cpu_count": psutil.cpu_count(),
@@ -77,6 +90,8 @@ def collect_stats():
         "wifi": wifi_info,
         "uptime": f"{days}d {hours}h {mins}m",
         "processes": procs,
+        "idle_ms": idle_ms,
+        "suspended": suspended,
         "timestamp": int(now),
     }
     stats_cache["data"] = stats
