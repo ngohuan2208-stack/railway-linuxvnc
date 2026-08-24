@@ -123,6 +123,10 @@ async def handle_stats(request):
     return web.json_response(collect_stats())
 
 
+async def handle_health(request):
+    return web.Response(text="ok", status=200)
+
+
 async def handle_novnc(request):
     rel = request.match_info.get("path", "")
     fpath = os.path.join(NOVNC_DIR, rel)
@@ -188,6 +192,7 @@ async def handle_static(request):
 
 app = web.Application()
 app.router.add_get("/", handle_index)
+app.router.add_get("/health", handle_health)
 app.router.add_get("/api/stats", handle_stats)
 app.router.add_get("/novnc/{path:.*}", handle_novnc)
 app.router.add_get("/websockify", ws_handler)
