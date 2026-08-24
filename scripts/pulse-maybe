@@ -1,0 +1,6 @@
+#!/bin/bash
+# Only run PulseAudio when ENABLE_AUDIO=1 (saves ~50-80MB RAM by default)
+if [ "${ENABLE_AUDIO:-0}" != "1" ]; then
+    exit 0
+fi
+exec su - user -c "pulseaudio --daemonize=no --exit-idle-time=-1"

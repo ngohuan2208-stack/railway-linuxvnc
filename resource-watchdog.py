@@ -25,6 +25,29 @@ HEAVY_APPS = {
 cpu_high_since = 0
 
 
+def _read_int(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
+def cgroup_mem():
+    """Return (used_bytes, limit_bytes) of THIS container, not the host."""
+    cur = _read_int("/sys/fs/cgroup/memory.current")
+    if cur is None:
+        cur = _read_int("/sys/fs/cgroup/memory/memory.usage_in_bytes")
+        mx = _read_int("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+    else:
+        mx = _read_int("/sys/fs/cgroup/memory.max")
+    if cur is None:
+        return None, None
+    if mx is None or mx > (1 << 50):
+        mx = None
+    return cur, mx
+
+
 def log(msg):
     print(f"[watchdog] {msg}", flush=True)
 
@@ -66,9 +89,15 @@ def top_by_rss(exclude_protected=True):
 
 
 def handle_memory():
-    mem = psutil.virtual_memory()
-    used_mb = mem.used // (1024 * 1024)
-    pct_of_budget = used_mb / MEM_LIMIT_MB * 100
+    cg_used, cg_limit = cgroup_mem()
+    if cg_used is not None:
+        used_mb = cg_used // (1024 * 1024)
+        budget_mb = (cg_limit // (1024 * 1024)) if cg_limit else MEM_LIMIT_MB
+    else:
+        mem = psutil.virtual_memory()
+        used_mb = mem.used // (1024 * 1024)
+        budget_mb = MEM_LIMIT_MB
+    pct_of_budget = used_mb / budget_mb * 100
 
     if pct_of_budget >= 95:
         log(f"CRITICAL {used_mb}MB/{MEM_LIMIT_MB}MB — killing heaviest app")

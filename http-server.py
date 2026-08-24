@@ -28,6 +28,30 @@ STATIC_DIR = "/srv"
 stats_cache = {"data": None, "ts": 0}
 client_session: aiohttp.ClientSession = None
 
+MB = 1024 * 1024
+
+
+def _read_int(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
+def cgroup_mem():
+    cur = _read_int("/sys/fs/cgroup/memory.current")
+    if cur is None:
+        cur = _read_int("/sys/fs/cgroup/memory/memory.usage_in_bytes")
+        mx = _read_int("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+    else:
+        mx = _read_int("/sys/fs/cgroup/memory.max")
+    if cur is None:
+        return None, None
+    if mx is None or mx > (1 << 50):
+        mx = None
+    return cur, mx
+
 HOP_HEADERS = {
     "host", "connection", "upgrade", "keep-alive",
     "transfer-encoding", "content-encoding", "content-length",
@@ -75,6 +99,16 @@ def collect_stats():
     except Exception as e:
         log.warning("collect_stats base error: %s", e)
         return stats_cache["data"] or {}
+
+    cg_used, cg_limit = cgroup_mem()
+    if cg_used is not None:
+        mem_total = cg_limit if cg_limit else mem.total
+        mem_used = min(cg_used, mem_total)
+        mem_percent = round(mem_used / mem_total * 100, 1)
+    else:
+        mem_total = mem.total
+        mem_used = mem.used
+        mem_percent = mem.percent
 
     days = int(uptime_s // 86400)
     hours = int((uptime_s % 86400) // 3600)
@@ -130,10 +164,10 @@ def collect_stats():
         "load_1": round(load[0], 2),
         "load_5": round(load[1], 2),
         "load_15": round(load[2], 2),
-        "mem_total": mem.total,
-        "mem_used": mem.used,
-        "mem_percent": mem.percent,
-        "mem_limit_mb": int(os.environ.get("MEM_LIMIT_MB", "1228")),
+        "mem_total": mem_total,
+        "mem_used": mem_used,
+        "mem_percent": mem_percent,
+        "mem_limit_mb": (cg_limit // MB) if cg_limit else int(os.environ.get("MEM_LIMIT_MB", "1228")),
         "swap_total": swap.total,
         "swap_used": swap.used,
         "swap_percent": swap.percent,
