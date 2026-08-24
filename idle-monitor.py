@@ -57,7 +57,7 @@ def suspend_desktop():
 
     try:
         subprocess.run(
-            ["supervisorctl", "stop", "florence"],
+            ["supervisorctl", "stop", "onboard"],
             timeout=10, capture_output=True,
         )
     except Exception:
@@ -90,7 +90,7 @@ def resume_desktop():
 
     try:
         subprocess.run(
-            ["supervisorctl", "start", "florence"],
+            ["supervisorctl", "start", "onboard"],
             timeout=10, capture_output=True,
         )
     except Exception:

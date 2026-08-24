@@ -19,7 +19,7 @@ Desktop Linux nhẹ, chạy trên trình duyệt web với sidebar theo dõi h�
 - **Xarchiver** — Nén/giải nén (zip, 7z, tar)
 - **xfce4-screenshooter** — Chụp màn hình
 - **Htop** — Theo dõi tài nguyên hệ thống
-- **Florence** — Bàn phím ảo
+- **Onboard** — Bàn phím ảo
 
 ### Trình duyệt
 - **Firefox ESR** — Trình duyệt đầy đủ tính năng
@@ -102,7 +102,7 @@ Cập nhật mỗi 2 giây qua API `/api/stats`.
 ## Bàn phím ảo
 
 1. Click nút "Bàn phím" trên sidebar
-2. Florence hiện ở dưới cùng desktop
+2. Onboard hiện ở dưới cùng desktop
 3. Gõ phím trên máy → gửi vào VNC desktop
 4. Toggle lại để ẩn
 
@@ -172,7 +172,7 @@ restore-data
 - **VNC Server**: TigerVNC (Xvnc localhost)
 - **Web**: Python HTTP server (noVNC proxy + stats API)
 - **IDE**: code-server (VS Code web)
-- **Virtual Keyboard**: Florence
+- **Virtual Keyboard**: Onboard
 - **Idle Monitor**: xprintidle + Python (auto-sleep)
 - **Process Manager**: supervisord
 - **Backup**: tar + symlink, tự động mỗi 30 phút

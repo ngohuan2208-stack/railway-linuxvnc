@@ -61,16 +61,17 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xm
 </channel>
 XFPM
 
-mkdir -p /home/user/.config/florence
-cat > /home/user/.config/florence/florence.conf << 'FLORENCE'
-[keyboard]
-width=800
-height=220
-opacity=0.9
-theme=default
-[FLORENCE]
-startHidden=true
-FLORENCE
+mkdir -p /home/user/.config/onboard
+cat > /home/user/.config/onboard/onboard.conf << 'ONBOARD'
+[com Canonical Onboard]
+theme = 'Dark'
+gtk theme = 'Dark'
+orientation = 'bottom'
+width = 800
+height = 220
+enable-repositioning = true
+show-on-force-touchscreen = false
+ONBOARD
 
 mkdir -p /home/user/.config/code-server
 cat > /home/user/.config/code-server/config.yaml << 'CODESERVER'

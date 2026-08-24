@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tigervnc-standalone-server tigervnc-common tigervnc-tools \
     novnc websockify \
     firefox-esr \
-    rclone htop florence xprintidle xdotool \
+    rclone htop onboard xprintidle xdotool \
     sudo zip unzip p7zip-full \
     fonts-dejavu-core tzdata net-tools iw \
     bash git curl wget nano procps ca-certificates \
