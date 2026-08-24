@@ -253,7 +253,16 @@ function toggleKeyboard(){
   if(kbVisible){o.classList.add('show');b.classList.add('active');f.src='/novnc/onboard.html'}
   else{o.classList.remove('show');b.classList.remove('active');f.src='about:blank'}
 }
-function openVSCode(){window.open('/code-server/','_blank')}
+async function openVSCode(){
+  var b=event.currentTarget;
+  var old=b.innerHTML;
+  b.innerHTML='Dang mo VS Code...';
+  try{await fetch('/api/start/code-server',{method:'POST'})}catch(e){}
+  setTimeout(function(){
+    b.innerHTML=old;
+    window.open('/code/','_blank');
+  },3000);
+}
 function openTerminal(){var f=document.getElementById('vnc-frame');f.contentWindow.postMessage({type:'xfce-terminal'},'*')}
 </script>
 </body>

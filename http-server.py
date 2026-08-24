@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HTTP server: noVNC proxy, stats API, static files."""
+"""HTTP server: noVNC proxy, code-server proxy, stats API, static files."""
 import asyncio
 import logging
 import os
@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 
+import aiohttp
 import psutil
 from aiohttp import web
 
@@ -19,10 +20,43 @@ log = logging.getLogger(__name__)
 
 VNC_HOST = "127.0.0.1"
 VNC_PORT = 5901
+CODE_HOST = "127.0.0.1"
+CODE_PORT = 8443
 NOVNC_DIR = "/usr/share/novnc"
 STATIC_DIR = "/srv"
 
 stats_cache = {"data": None, "ts": 0}
+client_session: aiohttp.ClientSession = None
+
+HOP_HEADERS = {
+    "host", "connection", "upgrade", "keep-alive",
+    "transfer-encoding", "content-encoding", "content-length",
+}
+
+
+async def on_startup(app):
+    global client_session
+    client_session = aiohttp.ClientSession()
+    app.create_task(zombie_reaper())
+
+
+async def cleanup(app):
+    if client_session:
+        await client_session.close()
+
+
+async def zombie_reaper():
+    while True:
+        await asyncio.sleep(30)
+        try:
+            while True:
+                pid, _ = os.waitpid(-1, os.WNOHANG)
+                if pid == 0:
+                    break
+        except ChildProcessError:
+            pass
+        except Exception:
+            pass
 
 
 def collect_stats():
@@ -48,17 +82,22 @@ def collect_stats():
 
     wifi_info = None
     try:
-        with open("/proc/net/wireless") as f:
-            lines = f.readlines()
-            if len(lines) > 2:
-                iw = os.popen("iw dev wlan0 link 2>/dev/null").read()
-                for line in iw.splitlines():
-                    line = line.strip()
-                    if line.startswith("SSID:"):
-                        wifi_info = line.split(":", 1)[1].strip()
-                    elif "signal:" in line:
-                        sig = line.split("signal:", 1)[1].strip()
-                        wifi_info = f"{wifi_info or 'Unknown'} ({sig})"
+        r = subprocess.run(
+            ["sh", "-c", "cat /proc/net/wireless 2>/dev/null | tail -n +3"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if r.stdout.strip():
+            r2 = subprocess.run(
+                ["iw", "dev", "wlan0", "link"],
+                capture_output=True, text=True, timeout=2,
+            )
+            for line in r2.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("SSID:"):
+                    wifi_info = line.split(":", 1)[1].strip()
+                elif "signal:" in line:
+                    sig = line.split("signal:", 1)[1].strip()
+                    wifi_info = f"{wifi_info or 'Unknown'} ({sig})"
     except Exception:
         pass
 
@@ -80,7 +119,7 @@ def collect_stats():
             ["pgrep", "-c", "Xvnc"], timeout=2
         ).decode().strip()
         if int(xvnc_out) > 0:
-            fps = int(os.environ.get("VNC_FPS", "30"))
+            fps = int(os.environ.get("VNC_FPS", "120"))
     except Exception:
         pass
 
@@ -120,12 +159,12 @@ async def handle_index(request):
     return web.FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
-async def handle_stats(request):
-    return web.json_response(collect_stats())
-
-
 async def handle_health(request):
     return web.Response(text="ok", status=200)
+
+
+async def handle_stats(request):
+    return web.json_response(collect_stats())
 
 
 async def handle_novnc(request):
@@ -136,8 +175,99 @@ async def handle_novnc(request):
     return web.Response(status=404)
 
 
-async def ws_handler(request):
-    ws_server = web.WebSocketResponse()
+async def start_code_server(request):
+    try:
+        subprocess.Popen(
+            ["supervisorctl", "start", "code-server"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return web.json_response({"status": "starting"})
+    except Exception as e:
+        return web.json_response({"status": "error", "msg": str(e)}, status=500)
+
+
+def filter_headers(headers):
+    return {k: v for k, v in headers.items() if k.lower() not in HOP_HEADERS}
+
+
+async def code_ws_bridge(req, path):
+    ws_server = web.WebSocketResponse(max_msg_size=16 * 1024 * 1024)
+    await ws_server.prepare(req)
+
+    qs = f"?{req.query_string}" if req.query_string else ""
+    url = f"ws://{CODE_HOST}:{CODE_PORT}/{path}{qs}"
+    try:
+        session = aiohttp.ClientSession()
+        ws_client = await session.ws_connect(url, max_msg_size=0)
+    except Exception as e:
+        log.warning("code-server WS connect failed: %s", e)
+        await ws_server.close(code=1011)
+        return ws_server
+
+    async def c2r():
+        async for msg in ws_server:
+            if msg.type == web.WSMsgType.TEXT:
+                await ws_client.send_str(msg.data)
+            elif msg.type == web.WSMsgType.BINARY:
+                await ws_client.send_bytes(msg.data)
+            else:
+                break
+
+    async def r2c():
+        async for msg in ws_client:
+            if msg.type == web.WSMsgType.TEXT:
+                await ws_server.send_str(msg.data)
+            elif msg.type == web.WSMsgType.BINARY:
+                await ws_server.send_bytes(msg.data)
+            else:
+                break
+
+    await asyncio.gather(c2r(), r2c(), return_exceptions=True)
+    try:
+        await ws_client.close()
+    finally:
+        await session.close()
+    await ws_server.close()
+    return ws_server
+
+
+async def code_proxy(req):
+    path = req.match_info.get("path", "")
+
+    if req.headers.get("Upgrade", "").lower() == "websocket":
+        return await code_ws_bridge(req, path)
+
+    qs = f"?{req.query_string}" if req.query_string else ""
+    url = f"http://{CODE_HOST}:{CODE_PORT}/{path}{qs}"
+
+    body = None
+    if req.method in ("POST", "PUT", "PATCH"):
+        body = await req.read()
+
+    if client_session is None:
+        return web.Response(status=502, text="proxy not ready")
+
+    try:
+        async with client_session.request(
+            req.method, url, data=body,
+            headers=filter_headers(req.headers),
+            allow_redirects=False, timeout=aiohttp.ClientTimeout(total=60),
+        ) as r:
+            data = await r.read()
+            headers = {k: v for k, v in r.headers.items()
+                       if k.lower() not in HOP_HEADERS}
+            return web.Response(status=r.status, body=data, headers=headers)
+    except Exception:
+        return web.Response(
+            status=502,
+            text="<h1>VS Code chua khoi dong</h1>"
+                 "<p>Bam nut VS Code o sidebar de bat dau.</p>",
+            content_type="text/html",
+        )
+
+
+async def vnc_ws_handler(request):
+    ws_server = web.WebSocketResponse(max_msg_size=0)
     await ws_server.prepare(request)
 
     try:
@@ -192,19 +322,23 @@ async def handle_static(request):
 
 
 app = web.Application()
+app.on_startup.append(on_startup)
+app.on_cleanup.append(cleanup)
 app.router.add_get("/", handle_index)
 app.router.add_get("/health", handle_health)
 app.router.add_get("/api/stats", handle_stats)
+app.router.add_post("/api/start/code-server", start_code_server)
+app.router.add_get("/api/start/code-server", start_code_server)
+app.router.add_route("*", "/code", code_proxy)
+app.router.add_route("*", "/code/{path:.*}", code_proxy)
 app.router.add_get("/novnc/{path:.*}", handle_novnc)
-app.router.add_get("/websockify", ws_handler)
+app.router.add_get("/websockify", vnc_ws_handler)
 app.router.add_get("/{path:.*}", handle_static)
 
 
 def main():
     port = int(os.environ.get("PORT", "8080"))
     log.info("Starting HTTP server on port %s", port)
-    log.info("Serving noVNC from %s", NOVNC_DIR)
-    log.info("Serving index from %s", STATIC_DIR)
     web.run_app(app, host="0.0.0.0", port=port)
 
 

@@ -9,7 +9,7 @@ import psutil
 MEM_LIMIT_MB = int(os.environ.get("MEM_LIMIT_MB", "1228"))
 CPU_MAX_PCT = int(os.environ.get("CPU_MAX_PCT", "85"))
 DISK_CLEAN_PCT = int(os.environ.get("DISK_CLEAN_PCT", "80"))
-CHECK_INTERVAL = int(os.environ.get("WATCHDOG_INTERVAL", "5"))
+CHECK_INTERVAL = int(os.environ.get("WATCHDOG_INTERVAL", "10"))
 
 PROTECTED = {
     "supervisord", "Xvnc", "dbus-daemon", "dbus-launch",

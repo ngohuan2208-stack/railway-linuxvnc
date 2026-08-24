@@ -13,6 +13,10 @@ tar czf "$BACKUP_FILE" \
     --exclude='.backups' \
     --exclude='Drive' \
     --exclude='.local/share/Trash' \
+    --exclude='.config/chromium/*/Cache' \
+    --exclude='.config/chromium/*/Code Cache' \
+    --exclude='.mozilla/*/cache2' \
+    --exclude='.local/share/code-server/CachedData' \
     -C /home/user \
     Desktop Documents Downloads .config .vnc 2>/dev/null || true
 
