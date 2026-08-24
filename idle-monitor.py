@@ -55,14 +55,6 @@ def suspend_desktop():
     except Exception as e:
         log(f"stop desktop: {e}")
 
-    try:
-        subprocess.run(
-            ["supervisorctl", "stop", "onboard"],
-            timeout=10, capture_output=True,
-        )
-    except Exception:
-        pass
-
     if DROP_CACHE:
         drop_caches()
 
@@ -87,14 +79,6 @@ def resume_desktop():
         )
     except Exception as e:
         log(f"start desktop: {e}")
-
-    try:
-        subprocess.run(
-            ["supervisorctl", "start", "onboard"],
-            timeout=10, capture_output=True,
-        )
-    except Exception:
-        pass
 
     try:
         os.remove(SUSPEND_FILE)

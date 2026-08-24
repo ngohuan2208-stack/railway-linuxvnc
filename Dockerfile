@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PORT=8080 \
     RESOLUTION=1600x900 \
     VNC_DEPTH=24 \
+    VNC_FPS=120 \
     LANG=C.UTF-8 \
     LANGUAGE=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -31,7 +32,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     arc-theme papirus-icon-theme \
     xfce4-taskmanager \
     tor privoxy proxychains4 \
-    conky \
     wget curl git nano procps ca-certificates \
     sudo zip unzip p7zip-full \
     fonts-dejavu-core fonts-liberation fonts-noto-color-emoji tzdata net-tools iw \
