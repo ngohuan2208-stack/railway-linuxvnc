@@ -37,7 +37,7 @@ HOP_HEADERS = {
 async def on_startup(app):
     global client_session
     client_session = aiohttp.ClientSession()
-    app.create_task(zombie_reaper())
+    asyncio.create_task(zombie_reaper())
 
 
 async def cleanup(app):
