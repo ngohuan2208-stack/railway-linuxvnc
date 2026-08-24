@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     arc-theme papirus-icon-theme \
     xfce4-taskmanager \
     tor privoxy proxychains4 \
+    pulseaudio \
     wget curl git nano procps ca-certificates \
     sudo zip unzip p7zip-full \
     fonts-dejavu-core fonts-liberation fonts-noto-color-emoji tzdata net-tools iw \
@@ -56,6 +57,7 @@ RUN chmod +x /usr/local/bin/*
 
 COPY http-server.py /usr/local/bin/http-server.py
 COPY idle-monitor.py /usr/local/bin/idle-monitor.py
+COPY resource-watchdog.py /usr/local/bin/resource-watchdog.py
 COPY index.html /srv/index.html
 COPY wallpaper-gen.py /usr/local/bin/wallpaper-gen.py
 

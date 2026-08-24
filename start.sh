@@ -14,10 +14,15 @@ IDLE_CHECK=${IDLE_CHECK:-10}
 DROP_CACHE=${DROP_CACHE:-1}
 ENABLE_PROXY=${ENABLE_PROXY:-0}
 VNC_FPS=${VNC_FPS:-120}
+MEM_LIMIT_MB=${MEM_LIMIT_MB:-1228}
+CPU_MAX_PCT=${CPU_MAX_PCT:-85}
+DISK_CLEAN_PCT=${DISK_CLEAN_PCT:-80}
+WATCHDOG_INTERVAL=${WATCHDOG_INTERVAL:-5}
 
 export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ
 export IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
 export AUTO_BACKUP BACKUP_INTERVAL_MIN AUTO_BACKUP_ON_EXIT ENABLE_PROXY
+export MEM_LIMIT_MB CPU_MAX_PCT DISK_CLEAN_PCT WATCHDOG_INTERVAL
 
 echo "=== Linux Desktop (XFCE + noVNC + VS Code) ==="
 echo "PORT=$PORT RES=$RESOLUTION DEPTH=$VNC_DEPTH"
@@ -204,6 +209,12 @@ height = 220
 enable-repositioning = true
 show-on-force-touchscreen = false
 ONBOARD
+
+# --- PULSEAUDIO (loa: null sink, app không crash khi phát âm thanh) ---
+mkdir -p /home/user/.config/pulse
+cat > /home/user/.config/pulse/default.pa << 'PULSE'
+.include /etc/pulse/default.pa
+PULSE
 
 # --- CODE-SERVER ---
 mkdir -p /home/user/.config/code-server

@@ -94,6 +94,7 @@ def collect_stats():
         "mem_total": mem.total,
         "mem_used": mem.used,
         "mem_percent": mem.percent,
+        "mem_limit_mb": int(os.environ.get("MEM_LIMIT_MB", "1228")),
         "swap_total": swap.total,
         "swap_used": swap.used,
         "swap_percent": swap.percent,
