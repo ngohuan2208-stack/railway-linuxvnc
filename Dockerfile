@@ -62,7 +62,8 @@ COPY index.html /srv/index.html
 COPY wallpaper-gen.py /usr/local/bin/wallpaper-gen.py
 
 COPY start.sh /start.sh
-RUN chmod +x /start.sh
+RUN chmod +x /start.sh \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpaper.png 1600 900
 
 COPY supervisord.conf /etc/supervisor/supervisord.conf
 

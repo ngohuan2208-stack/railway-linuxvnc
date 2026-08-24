@@ -174,8 +174,13 @@ gtk-icon-theme-name="Papirus-Dark"
 gtk-font-name="DejaVu Sans 10"
 GTK2
 
-# --- WALLPAPER ---
-python3 /usr/local/bin/wallpaper-gen.py /home/user/.wallpapers/default.png 1920 1080 2>/dev/null || true
+# --- WALLPAPER (pre-built in image, instant boot) ---
+mkdir -p /home/user/.wallpapers
+if [ -f /opt/wallpaper.png ]; then
+    cp -f /opt/wallpaper.png /home/user/.wallpapers/default.png 2>/dev/null || true
+else
+    python3 /usr/local/bin/wallpaper-gen.py /home/user/.wallpapers/default.png 1600 900 2>/dev/null || true
+fi
 
 mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << 'WALLPAPER'
