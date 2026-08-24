@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+BACKUP_DIR="/home/user/.backups"
+LATEST="$BACKUP_DIR/latest.tar.gz"
+
+if [ ! -f "$LATEST" ]; then
+    echo "No backup found at $LATEST"
+    exit 1
+fi
+
+echo "Restoring from: $LATEST"
+tar xzf "$LATEST" -C /home/user
+chown -R user:user /home/user 2>/dev/null || true
+echo "Restore complete."

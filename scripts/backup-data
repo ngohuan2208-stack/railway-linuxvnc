@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+BACKUP_DIR="/home/user/.backups"
+MAX_BACKUPS=5
+mkdir -p "$BACKUP_DIR"
+
+STAMP=$(date +%Y%m%d-%H%M%S)
+BACKUP_FILE="$BACKUP_DIR/data-${STAMP}.tar.gz"
+
+tar czf "$BACKUP_FILE" \
+    --exclude='.cache' \
+    --exclude='.backups' \
+    --exclude='Drive' \
+    --exclude='.local/share/Trash' \
+    -C /home/user \
+    Desktop Documents Downloads .config .vnc 2>/dev/null || true
+
+if [ -f "$BACKUP_FILE" ]; then
+    ln -sf "data-${STAMP}.tar.gz" "$BACKUP_DIR/latest.tar.gz"
+    ls -1t "$BACKUP_DIR"/data-*.tar.gz 2>/dev/null | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
+    echo "Backup saved: $BACKUP_FILE"
+else
+    echo "Backup failed"
+    exit 1
+fi

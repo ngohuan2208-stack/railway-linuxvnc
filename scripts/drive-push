@@ -1,0 +1,6 @@
+#!/bin/bash
+echo "Pushing data to Google Drive..."
+rclone sync /home/user/Desktop Drive:railway-desktop/Desktop --update --verbose --fast-list 2>/dev/null || true
+rclone sync /home/user/Documents Drive:railway-desktop/Documents --update --verbose --fast-list 2>/dev/null || true
+rclone sync /home/user/Downloads Drive:railway-desktop/Downloads --update --verbose --fast-list 2>/dev/null || true
+echo "Push complete."

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+echo "=== Google Drive Setup (rclone) ==="
+echo ""
+echo "Steps to configure Google Drive:"
+echo "  1. Choose 'n' for New remote"
+echo "  2. Name it 'Drive' (lowercase d)"
+echo "  3. Choose Google Drive"
+echo "  4. Leave client_id and client_secret empty (press Enter)"
+echo "  5. Choose scope 1 (full access)"
+echo "  6. Leave root_folder_id empty"
+echo "  7. Choose auto config (copy URL in browser)"
+echo ""
+echo "After setup, use: drive-push / drive-pull / drive-mount"
+echo ""
+
+exec rclone config

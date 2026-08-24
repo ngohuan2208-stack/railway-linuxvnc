@@ -2,36 +2,49 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
-    VNC_PORT=5901 \
+    PORT=8080 \
+    RESOLUTION=1600x900 \
+    VNC_DEPTH=24 \
+    VNC_PASSWORD=linuxdesktop \
     LANG=C.UTF-8 \
     LANGUAGE=C.UTF-8 \
-    LC_ALL=C.UTF-8
+    LC_ALL=C.UTF-8 \
+    MALLOC_ARENA_MAX=2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
-    xfce4 xfce4-terminal thunar \
+    dbus-x11 \
+    xfwm4 xfce4-panel xfce4-session xfce4-settings xfdesktop4 xfce4-notifyd \
+    xfce4-terminal xfce4-screenshooter \
+    thunar mousepad xarchiver \
     tigervnc-standalone-server tigervnc-common tigervnc-tools \
     novnc websockify \
-    dbus-x11 xdg-utils \
-    bash git curl wget nano \
-    python3 python3-pip \
-    procps \
+    firefox-esr \
+    rclone htop \
+    sudo zip unzip p7zip-full \
+    fonts-dejavu-core tzdata \
+    bash git curl wget nano procps ca-certificates \
+    python3 python3-pip python3-requests \
+    && pip3 install --no-cache-dir --break-system-packages gdown \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /root/.vnc && \
-    echo '#!/bin/sh\n\
-unset SESSION_MANAGER\n\
-unset DBUS_SESSION_BUS_ADDRESS\n\
-exec startxfce4' > /root/.vnc/xstartup && \
-    chmod +x /root/.vnc/xstartup
+RUN useradd -m -d /home/user -s /bin/bash user \
+    && echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user \
+    && chmod 0440 /etc/sudoers.d/user
 
-RUN mkdir -p /home/user && \
-    useradd -m -d /home/user -s /bin/bash user && \
-    chown -R user:user /home/user
+RUN mkdir -p /home/user/{Desktop,Documents,Downloads,.config,.cache,.vnc,.backups,Drive}
+
+COPY scripts/ /usr/local/bin/
+RUN chmod +x /usr/local/bin/backup-data /usr/local/bin/restore-data \
+    /usr/local/bin/autobackup-loop \
+    /usr/local/bin/drive-setup /usr/local/bin/drive-push \
+    /usr/local/bin/drive-pull /usr/local/bin/drive-mount
+
+COPY novnc-index.html /usr/share/novnc/index.html
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh

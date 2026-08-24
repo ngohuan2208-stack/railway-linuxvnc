@@ -1,0 +1,7 @@
+#!/bin/bash
+echo "Pulling data from Google Drive..."
+rclone sync Drive:railway-desktop/Desktop /home/user/Desktop --update --verbose --fast-list 2>/dev/null || true
+rclone sync Drive:railway-desktop/Documents /home/user/Documents --update --verbose --fast-list 2>/dev/null || true
+rclone sync Drive:railway-desktop/Downloads /home/user/Downloads --update --verbose --fast-list 2>/dev/null || true
+chown -R user:user /home/user/Desktop /home/user/Documents /home/user/Downloads 2>/dev/null || true
+echo "Pull complete."

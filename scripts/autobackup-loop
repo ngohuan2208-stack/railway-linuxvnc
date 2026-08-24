@@ -1,0 +1,8 @@
+#!/bin/bash
+
+INTERVAL=$(( ${BACKUP_INTERVAL_MIN:-30} * 60 ))
+
+while true; do
+    sleep "$INTERVAL"
+    /usr/local/bin/backup-data 2>/dev/null || true
+done

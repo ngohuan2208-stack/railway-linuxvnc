@@ -1,83 +1,107 @@
-# Linux Desktop on Railway
+# Linux Desktop trên Railway
 
-A lightweight Linux desktop environment accessible via web browser, running on Railway.
+Desktop Linux nhẹ, chạy trên trình duyệt web với đầy đủ công cụ.
 
-## Features
+## Cài đặt công cụ
 
-- XFCE4 desktop environment
-- VNC + noVNC for browser-based access
-- Terminal, File Manager (Thunar), and basic applications
-- Pre-installed: bash, git, curl, wget, nano, python3, Node.js/npm
-- Persistent volume at `/home` for file storage
-- Simple password authentication via environment variable
-- Optimized for low RAM and CPU usage
+### Desktop & Office
+- **XFCE4** — Desktop nhẹ (~80MB RAM idle)
+- **Thunar** — Quản lý tập tin
+- **Mousepad** — Soạn thảo văn bản
+- **Xarchiver** — Nén/giải nén (zip, 7z, tar)
+- **xfce4-screenshooter** — Chụp màn hình
+- **Htop** — Theo dõi tài nguyên hệ thống
 
-## Deploy to Railway
+### Trình duyệt
+- **Firefox ESR** — Trình duyệt đầy đủ tính năng
 
-### Prerequisites
+### Cloud Drive
+- **rclone** — Đồng bộ Google Drive, OneDrive, Dropbox...
+- **gdown** — Tải file từ Google Drive công khai
 
-- [Railway account](https://railway.app)
-- [Railway CLI](https://docs.railway.app/reference/cli) (optional)
+### Dev Tools
+- **git, curl, wget, nano** — Cơ bản
+- **Python3 + pip** — Python development
+- **Node.js 20 + npm** — JavaScript development
 
-### Steps
+## Triển khai lên Railway
 
-1. **Fork or clone this repository**
+1. Fork repo này
+2. Tạo project mới trên Railway → Deploy from GitHub
+3. Set biến môi trường
+4. Thêm Volume mount tại `/home`
+5. Generate domain
+6. Mở domain → nhập VNC password
 
-2. **Create a new Railway project**
-   - Go to [railway.app](https://railway.app)
-   - Click "New Project"
-   - Select "Deploy from GitHub repo"
-   - Select this repository
+## Biến môi trường
 
-3. **Set environment variables**
-   - In Railway dashboard, go to your service → Variables
-   - Add `VNC_PASSWORD` with your desired desktop password (default: `linuxdesktop`)
+| Biến | Mặc định | Mô tả |
+|------|-----------|-------|
+| `PORT` | `8080` | Cổng web noVNC |
+| `VNC_PASSWORD` | `linuxdesktop` | Mật khẩu desktop |
+| `RESOLUTION` | `1600x900` | Độ phân giải |
+| `VNC_DEPTH` | `24` | Số bit màu (16=ít RAM hơn, 24=nét hơn) |
+| `TZ` | _(trống)_ | Múi giờ (VD: `Asia/Ho_Chi_Minh`) |
+| `AUTO_BACKUP` | `1` | Tự động backup định kỳ |
+| `BACKUP_INTERVAL_MIN` | `30` | Phút giữa các lần backup |
+| `AUTO_BACKUP_ON_EXIT` | `1` | Backup khi tắt máy |
 
-4. **Add persistent volume**
-   - In Railway dashboard, go to your service → Volumes
-   - Add a volume mounted at `/home`
+## Cloud Drive
 
-5. **Generate a domain**
-   - In Railway dashboard, go to your service → Settings → Networking
-   - Click "Generate Domain" to get a public URL
+### Cấu hình lần đầu
+```bash
+drive-setup
+```
+Làm theo hướng dẫn trên terminal.
 
-6. **Access your desktop**
-   - Open the generated domain in your browser
-   - Enter the VNC password when prompted
-   - You'll see the XFCE4 desktop
+### Đồng bộ lên Drive
+```bash
+drive-push    # Đồng bộ Desktop, Documents, Downloads lên Drive
+drive-pull    # Tải từ Drive về máy
+drive-mount   # Gắn Google Drive (nếu có FUSE)
+```
 
-## Environment Variables
+## Backup & Restore
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8080` | Port for noVNC web interface (auto-set by Railway) |
-| `VNC_PASSWORD` | `linuxdesktop` | Password for VNC/desktop access |
+### Backup tự động
+- Chạy mỗi 30 phút (cấu hình `BACKUP_INTERVAL_MIN`)
+- Backup khi tắt máy (cấu hình `AUTO_BACKUP_ON_EXIT`)
+- Lưu tại `/home/user/.backups/`
+- Giữ 5 bản gần nhất
 
-## Usage
+### Backup thủ công
+```bash
+backup-data
+```
 
-- **Terminal**: Right-click desktop → Applications → Terminal Emulator
-- **File Manager**: Right-click desktop → Applications → File Manager
-- **Applications**: Right-click desktop → Applications menu
+### Khôi phục
+```bash
+restore-data
+```
 
-## Local Development
+## Tiết kiệm RAM
+
+- **VNC_DEPTH=16** — Giảm 1/3 RAM framebuffer
+- **RESOLUTION nhỏ** — Giảm RAM VNC (VD: `1280x720`)
+- **XFCE compositor tắt** — Tiết kiệm RAM GPU
+- **MALLOC_ARENA_MAX=2** — Giảm bộ nhớ glibc
+- **Firefox** — Chỉ dùng RAM khi mở, không chạy nền
+- **IDLE RAM**: ~150-250MB (không có trình duyệt)
+
+## Phát triển cục bộ
 
 ```bash
 docker build -t linux-desktop .
 docker run -p 8080:8080 -e VNC_PASSWORD=mypassword linux-desktop
 ```
 
-Then open `http://localhost:8080/vnc.html` in your browser.
+Mở `http://localhost:8080/vnc.html` trên trình duyệt.
 
-## Architecture
+## Kiến trúc
 
 - **Base**: Debian Bookworm Slim
-- **Desktop**: XFCE4 (lightweight)
-- **VNC Server**: TigerVNC (Xvnc)
-- **Web Client**: noVNC + websockify
+- **Desktop**: XFCE4 (tùy chỉnh nhẹ)
+- **VNC Server**: TigerVNC (Xvnc localhost)
+- **Web Client**: noVNC + websockify + heartbeat
 - **Process Manager**: supervisord
-
-## Resource Usage
-
-- RAM: ~200-400MB idle
-- CPU: Minimal when idle
-- Disk: ~800MB (base image)
+- **Backup**: tar + symlink, tự động mỗi 30 phút
