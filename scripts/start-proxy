@@ -1,0 +1,14 @@
+#!/bin/bash
+echo "=== IP Block Fix: Start Tor Proxy ==="
+sudo supervisorctl start tor
+sudo supervisorctl start privoxy
+sleep 3
+echo "Tor started. SOCKS5 proxy: 127.0.0.1:9050"
+echo "HTTP proxy: 127.0.0.1:8118"
+echo ""
+echo "Usage:"
+echo "  proxychains4 firefox-esr    # Browse via Tor"
+echo "  proxychains4 chromium-browser --no-sandbox"
+echo "  curl --proxy socks5://127.0.0.1:9050 https://check.torproject.org"
+echo ""
+echo "Test IP: proxychains4 curl -s https://httpbin.org/ip"

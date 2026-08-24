@@ -6,9 +6,9 @@
 <title>Linux Desktop</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0e17;--panel:#111827;--border:#1e293b;--text:#e2e8f0;--dim:#64748b;--accent:#3b82f6;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4}
+:root{--bg:#0a0e17;--panel:rgba(17,24,39,0.92);--border:#1e293b;--text:#e2e8f0;--dim:#64748b;--accent:#3b82f6;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4}
 body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex}
-#sidebar{width:260px;min-width:260px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin}
+#sidebar{width:260px;min-width:260px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 #sidebar::-webkit-scrollbar{width:4px}
 #sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
@@ -24,18 +24,20 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 .stat-value.ok{color:var(--green)}
 .stat-value.warn{color:var(--amber)}
 .stat-value.danger{color:var(--red)}
+.stat-value.fps{color:var(--cyan);font-variant-numeric:tabular-nums}
 .bar-bg{height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}
 .bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
 .bar-fill.ok{background:var(--green)}
 .bar-fill.warn{background:var(--amber)}
 .bar-fill.danger{background:var(--red)}
-.net-icon{display:flex;align-items:center;gap:4px}
 .wifi-badge{display:inline-flex;align-items:center;gap:3px;background:var(--border);padding:1px 6px;border-radius:4px;font-size:9px;color:var(--green)}
 .tools{padding:10px 14px;border-top:1px solid var(--border);margin-top:auto}
 .tool-btn{width:100%;padding:8px;margin-bottom:4px;background:var(--border);border:1px solid transparent;border-radius:6px;color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s}
 .tool-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tool-btn.active{background:var(--accent);color:#fff}
 .tool-btn svg{width:14px;height:14px;fill:currentColor}
+.tool-row{display:flex;gap:4px}
+.tool-row .tool-btn{flex:1;margin-bottom:0}
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 #vnc-frame{flex:1;border:none;background:#000}
 @media(max-width:768px){
@@ -43,10 +45,11 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left:0;top:0}
 #menu-toggle{display:flex!important}
 }
-#menu-toggle{display:none;position:fixed;top:8px;left:8px;z-index:50;width:36px;height:36px;background:var(--panel);border:1px solid var(--border);border-radius:8px;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
-#florence-overlay{display:none;position:fixed;bottom:0;left:0;right:0;height:220px;z-index:200;background:rgba(0,0,0,.9);border-top:2px solid var(--accent)}
-#florence-overlay iframe{width:100%;height:100%;border:none}
-#florence-overlay.show{display:block}
+#menu-toggle{display:none;position:fixed;top:8px;left:8px;z-index:50;width:36px;height:36px;background:var(--panel);border:1px solid var(--border);border-radius:8px;align-items:center;justify-content:center;cursor:pointer;color:var(--text);backdrop-filter:blur(10px)}
+#onboard-overlay{display:none;position:fixed;bottom:0;left:0;right:0;height:220px;z-index:200;background:rgba(0,0,0,.9);border-top:2px solid var(--accent)}
+#onboard-overlay iframe{width:100%;height:100%;border:none}
+#onboard-overlay.show{display:block}
+.fps-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(6,182,212,0.15);padding:2px 8px;border-radius:4px;font-size:10px;color:var(--cyan);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -116,6 +119,7 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
     </div>
     <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value" id="sys-uptime">--</span></div>
     <div class="stat-row"><span class="stat-label">Processes</span><span class="stat-value" id="sys-procs">--</span></div>
+    <div class="stat-row"><span class="stat-label">FPS</span><span class="stat-value fps" id="sys-fps">--</span></div>
     <div class="stat-row"><span class="stat-label">Idle</span><span class="stat-value" id="sys-idle">--</span></div>
     <div class="stat-row"><span class="stat-label">Sleep</span><span class="stat-value" id="sys-sleep">--</span></div>
     <div class="stat-row"><span class="stat-label">Time</span><span class="stat-value" id="sys-time">--</span></div>
@@ -126,23 +130,35 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
       <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
       Bàn phím
     </button>
-    <button class="tool-btn" onclick="openVSCode()">
-      <svg viewBox="0 0 24 24"><path d="M17.59 3.59c-.38-.38-.89-.59-1.42-.59H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6.83c0-.53-.21-1.04-.59-1.41l-1.82-1.83zM15 18H9v-2h6v2zm3-6H9V8h9v4z"/></svg>
-      VS Code
-    </button>
-    <button class="tool-btn" onclick="openTerminal()">
-      <svg viewBox="0 0 24 24"><path d="M20 19.59V8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c.45 0 .85-.15 1.19-.4l-4.43-4.43c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L20 19.59z"/></svg>
-      Terminal
-    </button>
+    <div class="tool-row">
+      <button class="tool-btn" onclick="openVSCode()">
+        <svg viewBox="0 0 24 24"><path d="M17.59 3.59c-.38-.38-.89-.59-1.42-.59H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6.83c0-.53-.21-1.04-.59-1.41l-1.82-1.83zM15 18H9v-2h6v2zm3-6H9V8h9v4z"/></svg>
+        VS Code
+      </button>
+      <button class="tool-btn" onclick="openTerminal()">
+        <svg viewBox="0 0 24 24"><path d="M20 19.59V8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c.45 0 .85-.15 1.19-.4l-4.43-4.43c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L20 19.59z"/></svg>
+        Terminal
+      </button>
+    </div>
+    <div class="tool-row" style="margin-top:4px">
+      <button class="tool-btn" onclick="openBrowser('firefox')">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+        Firefox
+      </button>
+      <button class="tool-btn" onclick="openBrowser('chromium')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="#0a0e17"/><path d="M12 8a4 4 0 014 4h4A8 8 0 004 12h4a4 4 0 014-4z" fill="#0a0e17"/></svg>
+        Chromium
+      </button>
+    </div>
   </div>
 </div>
 
 <div id="main">
-  <iframe id="vnc-frame" src="/novnc/vnc.html?autoconnect=true&resize=scale&quality=6&compression=20&reconnect=true&reconnect_delay=2000"></iframe>
+  <iframe id="vnc-frame" src="/novnc/vnc.html?autoconnect=true&resize=scale&quality=6&compression=20&reconnect=true&reconnect_delay=2000&fps=30"></iframe>
 </div>
 
-<div id="florence-overlay">
-  <iframe id="florence-frame" src="about:blank"></iframe>
+<div id="onboard-overlay">
+  <iframe id="onboard-frame" src="about:blank"></iframe>
 </div>
 
 <script>
@@ -150,6 +166,7 @@ function fmt(b){
   for(var u of['B','KB','MB','GB','TB']){if(b<1024)return b.toFixed(1)+' '+u;b/=1024}return b.toFixed(1)+' PB';
 }
 function cls(p){return p>85?'danger':p>60?'warn':'ok'}
+var prevBytes={sent:0,recv:0,ts:0};
 function upd(){
   fetch('/api/stats').then(r=>r.json()).then(d=>{
     var e;
@@ -180,6 +197,11 @@ function upd(){
 
     document.getElementById('sys-uptime').textContent=d.uptime;
     document.getElementById('sys-procs').textContent=d.processes;
+
+    if(d.fps!==undefined){
+      document.getElementById('sys-fps').textContent=d.fps+' FPS';
+    }
+
     var idleS=Math.round(d.idle_ms/1000);
     var idleMin=Math.floor(idleS/60);
     var idleSec=idleS%60;
@@ -195,8 +217,8 @@ upd();setInterval(upd,2000);
 var kbVisible=false;
 function toggleKeyboard(){
   kbVisible=!kbVisible;
-  var o=document.getElementById('florence-overlay');
-  var f=document.getElementById('florence-frame');
+  var o=document.getElementById('onboard-overlay');
+  var f=document.getElementById('onboard-frame');
   var b=document.getElementById('btn-keyboard');
   if(kbVisible){
     o.classList.add('show');
@@ -214,6 +236,10 @@ function openVSCode(){
 function openTerminal(){
   var f=document.getElementById('vnc-frame');
   f.contentWindow.postMessage({type:'xfce-terminal'},'*');
+}
+function openBrowser(browser){
+  var url=browser==='chromium'?'chromium-browser':'firefox-esr';
+  window.open('http://localhost:8080/novnc/?app='+url,'_blank');
 }
 </script>
 </body>

@@ -15,6 +15,50 @@ NOVNC_DIR = "/usr/share/novnc"
 STATIC_DIR = "/srv"
 
 stats_cache = {"data": None, "ts": 0}
+fps_counter = {"last": 0, "last_time": time.time()}
+
+
+def get_vnc_fps():
+    try:
+        with open("/proc/net/rfbstats", "r") as f:
+            pass
+    except Exception:
+        pass
+
+    now = time.time()
+    fps_cache_file = "/tmp/.vnc_fps"
+    try:
+        with open(fps_cache_file, "r") as f:
+            data = f.read().strip().split(",")
+            last_frames = int(data[0])
+            last_time = float(data[1])
+    except Exception:
+        last_frames, last_time = 0, now
+
+    try:
+        result = subprocess.check_output(
+            ["xdotool", "getactivewindow", "getwindowpid"],
+            env={"DISPLAY": os.environ.get("DISPLAY", ":1")},
+            timeout=2,
+        )
+        frames = last_frames + 1
+    except Exception:
+        frames = last_frames
+
+    elapsed = now - last_time
+    fps = 0
+    if elapsed >= 1.0:
+        fps = round(frames / elapsed, 0)
+        frames = 0
+        last_time = now
+
+    try:
+        with open(fps_cache_file, "w") as f:
+            f.write(f"{frames},{last_time}")
+    except Exception:
+        pass
+
+    return int(fps) if fps > 0 else fps_counter.get("last", 0)
 
 
 def collect_stats():
@@ -69,6 +113,8 @@ def collect_stats():
     except Exception:
         pass
 
+    fps = get_vnc_fps()
+
     stats = {
         "cpu_percent": psutil.cpu_percent(interval=0),
         "cpu_count": psutil.cpu_count(),
@@ -92,19 +138,12 @@ def collect_stats():
         "processes": procs,
         "idle_ms": idle_ms,
         "suspended": suspended,
+        "fps": fps,
         "timestamp": int(now),
     }
     stats_cache["data"] = stats
     stats_cache["ts"] = now
     return stats
-
-
-def fmt_bytes(b):
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if b < 1024:
-            return f"{b:.1f} {unit}"
-        b /= 1024
-    return f"{b:.1f} PB"
 
 
 async def handle_stats(request):
@@ -129,6 +168,25 @@ async def handle_novnc_static(request):
     if os.path.isfile(fpath):
         return web.FileResponse(fpath)
     return web.Response(status=404)
+
+
+async def handle_launch(request):
+    app_name = request.match_info.get("app", "")
+    display = os.environ.get("DISPLAY", ":1")
+    env = {"DISPLAY": display, "HOME": "/home/user", "PATH": "/usr/bin:/bin"}
+
+    if app_name == "firefox":
+        subprocess.Popen(
+            ["su", "-", "user", "-c", "DISPLAY=:1 firefox-esr &"],
+            env=env, start_new_session=True,
+        )
+    elif app_name == "chromium":
+        subprocess.Popen(
+            ["su", "-", "user", "-c", "DISPLAY=:1 chromium-browser --no-sandbox --disable-gpu &"],
+            env=env, start_new_session=True,
+        )
+
+    return web.json_response({"status": "launched", "app": app_name})
 
 
 async def ws_handler(request):
@@ -180,6 +238,7 @@ async def ws_handler(request):
 app = web.Application()
 app.router.add_get("/", handle_index)
 app.router.add_get("/api/stats", handle_stats)
+app.router.add_get("/api/launch/{app}", handle_launch)
 app.router.add_get("/novnc/{path:.*}", handle_novnc_static)
 app.router.add_get("/websockify", ws_handler)
 app.router.add_get("/{path:.*}", handle_static)

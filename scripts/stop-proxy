@@ -1,0 +1,5 @@
+#!/bin/bash
+echo "=== Stop Tor Proxy ==="
+sudo supervisorctl stop privoxy
+sudo supervisorctl stop tor
+echo "Tor proxy stopped. Direct connection restored."

@@ -1,178 +1,189 @@
 # Linux Desktop trên Railway
 
-Desktop Linux nhẹ, chạy trên trình duyệt web với sidebar theo dõi hệ thống.
+Desktop Linux nhẹ, tùy chỉnh cao, chạy trên trình duyệt web.
 
-## Giao diện
+## Tính năng chính
 
-- **Sidebar trái** — CPU, RAM, Disk, WiFi, Network, Idle time, Sleep status
-- **Bàn phím ảo** — Florence virtual keyboard, toggle bằng nút
-- **VS Code** — code-server (VS Code web), mở tab mới
-- **Desktop** — XFCE4 qua noVNC, auto-connect
-- **Auto-sleep** — Tự động tắt desktop khi idle, tiết kiệm RAM
+- **XFCE4** + Dock trong suốt (Arc-Dark theme)
+- **noVNC** + sidebar theo dõi FPS/RAM/CPU real-time
+- **Bàn phím ảo** Onboard
+- **VS Code** (code-server) port 8443
+- **YouTube** playback (Chromium + codecs)
+- **Auto-sleep** tiết kiệm RAM khi idle
+- **Tor proxy** chống IP block
+- **Wallpaper** gradient tùy chỉnh
 
-## Cài đặt công cụ
+## Ứng dụng có sẵn
 
-### Desktop & Office
-- **XFCE4** — Desktop nhẹ (~80MB RAM idle)
-- **Thunar** — Quản lý tập tin
-- **Mousepad** — Soạn thảo văn bản
-- **Xarchiver** — Nén/giải nén (zip, 7z, tar)
-- **xfce4-screenshooter** — Chụp màn hình
-- **Htop** — Theo dõi tài nguyên hệ thống
-- **Onboard** — Bàn phím ảo
+| Ứng dụng | Mục đích |
+|----------|----------|
+| Firefox ESR | Trình duyệt web |
+| Chromium | Trình duyệt nhanh, YouTube |
+| VS Code | Code editor (web) |
+| VLC | Xem video, nghe nhạc |
+| GIMP | Chỉnh sửa ảnh |
+| LibreOffice | Office (Writer, Calc, Impress) |
+| Thunar | Quản lý tập tin |
+| xfce4-terminal | Terminal emulator |
+| Mousepad | Soạn thảo văn bản |
+| htop | Theo dõi hệ thống |
+| xfce4-taskmanager | Quản lý tiến trình |
 
-### Trình duyệt
-- **Firefox ESR** — Trình duyệt đầy đủ tính năng
+## Triển khai
 
-### IDE
-- **VS Code (code-server)** — Trình biên tập code trên web
-
-### Cloud Drive
-- **rclone** — Đồng bộ Google Drive, OneDrive, Dropbox...
-- **gdown** — Tải file từ Google Drive công khai
-
-### Dev Tools
-- **git, curl, wget, nano** — Cơ bản
-- **Python3 + pip** — Python development
-- **Node.js 20 + npm** — JavaScript development
-
-## Triển khai lên Railway
-
-1. Fork repo này
-2. Tạo project mới trên Railway → Deploy from GitHub
-3. Set biến môi trường
+1. Fork repo
+2. Deploy trên Railway
+3. Set env vars (xem bên dưới)
 4. Thêm Volume mount tại `/home`
 5. Generate domain
-6. Mở domain → sidebar hiện bên trái
+6. Mở domain
 
 ## Biến môi trường
 
 | Biến | Mặc định | Mô tả |
 |------|-----------|-------|
-| `PORT` | `8080` | Cổng web (HTTP server + noVNC) |
-| `VNC_PASSWORD` | `linuxdesktop` | Mật khẩu desktop |
+| `PORT` | `8080` | Cổng web |
 | `RESOLUTION` | `1600x900` | Độ phân giải |
-| `VNC_DEPTH` | `24` | Số bit màu (16=ít RAM hơn, 24=nét hơn) |
-| `TZ` | _(trống)_ | Múi giờ (VD: `Asia/Ho_Chi_Minh`) |
-| `IDLE_TIMEOUT` | `300` | Giây trước khi auto-sleep (5 phút) |
-| `IDLE_CHECK` | `10` | Giây giữa các lần kiểm tra idle |
-| `DROP_CACHE` | `1` | Tự động drop page cache khi sleep (0=off) |
-| `AUTO_BACKUP` | `1` | Tự động backup định kỳ |
-| `BACKUP_INTERVAL_MIN` | `30` | Phút giữa các lần backup |
-| `AUTO_BACKUP_ON_EXIT` | `1` | Backup khi tắt máy |
+| `VNC_DEPTH` | `24` | Bit màu (16=ít RAM) |
+| `VNC_FPS` | `30` | FPS khung hình VNC |
+| `TZ` | _(trống)_ | Múi giờ |
+| `IDLE_TIMEOUT` | `300` | Giây trước khi sleep |
+| `ENABLE_PROXY` | `0` | Bật Tor proxy (1=bật) |
+| `AUTO_BACKUP` | `1` | Tự động backup |
 
-## Auto-Sleep (Tiết kiệm RAM cực đại)
+## FPS & Hiển thị
 
-Khi không hoạt động超过 `IDLE_TIMEOUT` giây:
+Sidebar hiển thị:
+- **FPS** — Tốc độ khung hình real-time
+- **CPU/RAM/Disk** — Usage với bar indicator
+- **Network** — WiFi, Sent/Recv bytes
+- **System** — Uptime, Idle time, Sleep status
 
-1. **Desktop XFCE4 dừng** → giải phóng ~100-200MB RAM
-2. **Page cache drop** → giải phóng thêm ~50-200MB RAM
-3. **VNC server giữ kết nối** → sẵn sàng wake khi có input
+## YouTube & Video
 
-Khi di chuyển chuột/phím (idle < 5s):
-- Desktop tự động restart
--各件回到 trạng thái bình thường
-
-### RAM tiết kiệm
-| Trạng thái | RAM sử dụng |
-|-----------|------------|
-| Desktop active | ~200-300MB |
-| Desktop sleeping | ~50-100MB |
-| **Tiết kiệm** | **~100-250MB** |
-
-### Cấu hình
+### Chromium (khuyến nghị)
 ```bash
-IDLE_TIMEOUT=300    # 5 phút idle → sleep
-IDLE_CHECK=10       # Kiểm tra mỗi 10 giây
-DROP_CACHE=1        # Drop page cache khi sleep
+# Chromium đã cấu hình sẵn cho YouTube
+chromium-browser --no-sandbox https://youtube.com
 ```
 
-## Sidebar Stats
-
-Sidebar hiển thị realtime:
-- **CPU**: Usage %, Cores, Frequency, Load average
-- **RAM**: Usage %, Used/Total, Swap
-- **Disk**: Usage %, Used/Total
-- **WiFi**: SSID + signal strength (nếu có)
-- **Network**: Sent/Recv total bytes
-- **System**: Uptime, Processes, Idle time, Sleep status, Clock
-
-Cập nhật mỗi 2 giây qua API `/api/stats`.
-
-## Bàn phím ảo
-
-1. Click nút "Bàn phím" trên sidebar
-2. Onboard hiện ở dưới cùng desktop
-3. Gõ phím trên máy → gửi vào VNC desktop
-4. Toggle lại để ẩn
-
-## VS Code
-
-- Click nút "VS Code" trên sidebar
-- Mở tab mới với code-server
-- Access trực tiếp, không cần auth
-- Port: 8443
-
-## Cloud Drive
-
-### Cấu hình lần đầu
+### Firefox
 ```bash
-drive-setup
-```
-Làm theo hướng dẫn trên terminal.
-
-### Đồng bộ lên Drive
-```bash
-drive-push    # Đồng bộ Desktop, Documents, Downloads lên Drive
-drive-pull    # Tải từ Drive về máy
-drive-mount   # Gắn Google Drive (nếu có FUSE)
+firefox-esr https://youtube.com
 ```
 
-## Backup & Restore
-
-### Backup tự động
-- Chạy mỗi 30 phút (cấu hình `BACKUP_INTERVAL_MIN`)
-- Backup khi tắt máy (cấu hình `AUTO_BACKUP_ON_EXIT`)
-- Lưu tại `/home/user/.backups/`
-- Giữ 5 bản gần nhất
-
-### Backup thủ công
+### VLC
 ```bash
-backup-data
+vlc /path/to/video.mp4
 ```
 
-### Khôi phục
+Codecs đã cài: ffmpeg, gstreamer1.0 (base, good, bad, ugly), libav
+
+## Tor Proxy (Chống IP Block)
+
+### Bật proxy
 ```bash
-restore-data
+start-proxy
 ```
 
-## Tiết kiệm RAM (Tổng hợp)
+### Dùng Tor
+```bash
+proxychains4 firefox-esr              # Firefox qua Tor
+proxychains4 chromium-browser --no-sandbox  # Chromium qua Tor
+proxychains4 curl -s https://httpbin.org/ip  # Test IP
+```
 
-### Tối ưu runtime
-- **VNC_DEPTH=16** — Giảm 1/3 RAM framebuffer
-- **RESOLUTION nhỏ** — Giảm RAM VNC (VD: `1280x720`)
-- **XFCE compositor tắt** — Tiết kiệm RAM GPU
-- **MALLOC_ARENA_MAX=2** — Giảm bộ nhớ glibc
-- **Firefox** — Chỉ dùng RAM khi mở, không chạy nền
+### Tắt proxy
+```bash
+stop-proxy
+```
 
-### Auto-sleep
-- **IDLE_TIMEOUT** — Tự động sleep desktop khi idle
-- **DROP_CACHE** — Drop page cache khi sleep
-- **RAM trung bình**: ~50-100MB khi sleep
+### Kiểm tra Tor
+```bash
+curl --proxy socks5://127.0.0.1:9050 https://check.torproject.org
+```
 
-### IDLE RAM
-- Desktop active: ~200-300MB
-- Desktop sleeping: ~50-100MB
-- **Tiết kiệm tối đa**: ~250MB
+## Đổi ảnh nền
+
+```bash
+# Wallpaper đã tạo sẵn
+ls ~/.wallpapers/
+
+# Đổi qua terminal
+DISPLAY=:1 xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s /path/to/image.png
+
+# Wallpaper tự động tạo gradient dark
+python3 /usr/local/bin/wallpaper-gen.py ~/.wallpapers/mywallpaper.png 1920 1080
+```
+
+## Dock trong suốt
+
+Dock (panel) XFCE4 đã cấu hình:
+- **Vị trí**: Bottom center
+- **Theme**: Arc-Dark, transparency 75%
+- **Icons**: Papirus-Dark, 36px
+- **Apps**: Firefox, Chromium, Terminal, Files, Tasklist
+
+## Cài app mới
+
+### Dùng apt (terminal)
+```bash
+sudo apt update && sudo apt install -y <package-name>
+```
+
+### Ví dụ
+```bash
+# Telegram
+sudo apt install -y telegram-desktop
+
+# Slack
+sudo snap install slack --classic  # (nếu snap available)
+
+# FileZilla
+sudo apt install -y filezilla
+
+# Audacity
+sudo apt install -y audacity
+
+# Blender
+sudo apt install -y blender
+```
+
+### App `.deb`
+```bash
+wget https://example.com/app.deb
+sudo dpkg -i app.deb
+sudo apt-get install -f  # sửa dependency nếu cần
+```
+
+### App `.AppImage`
+```bash
+chmod +x app.AppImage
+./app.AppImage
+```
+
+## Tiết kiệm RAM
+
+| Tính năng | Tiết kiệm |
+|-----------|-----------|
+| VNC_DEPTH=16 | ~50MB |
+| XFCE compositor off | ~30MB |
+| MALLOC_ARENA_MAX=2 | ~20MB |
+| Auto-sleep (idle) | ~100-200MB |
+| Drop page cache | ~50-200MB |
+| **Tổng tối đa** | **~250-400MB** |
 
 ## Kiến trúc
 
 - **Base**: Debian Bookworm Slim
-- **Desktop**: XFCE4 (tùy chỉnh nhẹ)
-- **VNC Server**: TigerVNC (Xvnc localhost)
+- **Desktop**: XFCE4 + Arc-Dark + Papirus icons
+- **VNC**: TigerVNC (Xvnc localhost, configurable FPS)
 - **Web**: Python HTTP server (noVNC proxy + stats API)
 - **IDE**: code-server (VS Code web)
-- **Virtual Keyboard**: Onboard
-- **Idle Monitor**: xprintidle + Python (auto-sleep)
+- **Browser**: Chromium + Firefox ESR (YouTube codecs)
+- **Media**: VLC, ffmpeg, gstreamer
+- **Office**: LibreOffice Writer/Calc/Impress
+- **Image**: GIMP
+- **Proxy**: Tor + Privoxy (optional)
+- **Idle Monitor**: xprintidle + Python auto-sleep
 - **Process Manager**: supervisord
-- **Backup**: tar + symlink, tự động mỗi 30 phút
