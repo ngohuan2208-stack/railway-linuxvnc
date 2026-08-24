@@ -267,15 +267,22 @@ async def code_proxy(req):
 
 
 async def vnc_ws_handler(request):
-    ws_server = web.WebSocketResponse(max_msg_size=0)
+    ws_server = web.WebSocketResponse(max_msg_size=0, compress=False, heartbeat=30)
     await ws_server.prepare(request)
 
-    try:
-        reader, writer = await asyncio.open_connection(VNC_HOST, VNC_PORT)
-    except Exception as e:
-        log.warning("VNC connect failed: %s", e)
-        await ws_server.close(code=1011, message=str(e).encode())
-        return ws_server
+    deadline = time.time() + 60
+    reader = None
+    writer = None
+    while True:
+        try:
+            reader, writer = await asyncio.open_connection(VNC_HOST, VNC_PORT)
+            break
+        except Exception as e:
+            if ws_server.closed or time.time() >= deadline:
+                log.warning("VNC connect failed: %s", e)
+                await ws_server.close(code=1011, message=str(e).encode())
+                return ws_server
+            await asyncio.sleep(2)
 
     async def client_to_vnc():
         try:
