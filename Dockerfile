@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     xfce4 xfce4-terminal thunar \
-    tigervnc-standalone-server tigervnc-common \
+    tigervnc-standalone-server tigervnc-common tigervnc-tools \
     novnc websockify \
     dbus-x11 xdg-utils \
     bash git curl wget nano \
