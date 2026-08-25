@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-08-25 (3) — Web cho mọi thiết bị, hình nền, tắt máy, persistence
+
+### Bug nghiêm trọng đã sửa
+
+1. **Zombie VNC connections chặn đa thiết bị (root cause "2 thiết bị không dùng được cùng lúc")**
+   - Khi client WebSocket chết đột ngột (TV sleep, mất mạng, đóng tab cứng), task đọc từ VNC trong bridge **treo vô hạn** vì VNC im lặng khi idle → kết nối không bao giờ được dọn. TigerVNC xử lý handshake gần như tuần tự → 1 zombie chặn TẤT CẢ thiết bị kết nối sau đó.
+   - Fix: teardown `FIRST_COMPLETED` (một bên chết → cancel bên kia ngay) + idle timeout 30s (`VNC_IDLE_TIMEOUT`) + WS heartbeat 15s. Test: auth OK → giết kết nối đột ngột → thiết bị kế tiếp auth OK **0.0s**; 3 thiết bị song song đều pass; không còn ESTABLISHED leak.
+
+### Thêm mới
+
+2. **Web UI chạy trên mọi thiết bị kể cả Tivi LG**
+   - Toàn bộ JS viết lại chuẩn ES5: bỏ async/await / arrow functions / NodeList.forEach (các construct khiến trình duyệt WebKit cũ **fail parse toàn bộ script** → trang trắng).
+   - Fallback XHR khi không có fetch; fallback polling khi không có EventSource (SSE).
+   - Auto-recovery: kẹt reconnecting/failed >30s → tự reload iframe một lần; `visibilitychange` → kiểm tra + reconnect khi tab thức dậy (mobile/TV suspend hay giết socket ngầm).
+
+3. **Hình nền** (`/api/wallpaper/*`)
+   - 6 gradient preset ("sinh động"): midnight, aurora, sunset, ocean, neon, forest — pre-built trong image, áp dụng tức thì.
+   - Upload ảnh riêng (PNG/JPG/WebP/GIF, tối đa 8MB, validate magic bytes — file giả mạo bị chặn).
+   - Áp dụng đúng theo DE: xfconf-query (XFCE) hoặc pcmanfm-qt config + restart desktop layer (LXQt). Marker `.wallpapers/CURRENT` ghi vết.
+
+4. **Tắt máy / Restart Desktop** (`/api/system/{action}`, yêu cầu `?confirm=really`)
+   - Reboot: backup dữ liệu → `supervisorctl shutdown` → container exit sạch (exit 0) → Railway policy ALWAYS tự boot lại (~30s). Đã test vòng đời đầy đủ: shutdown sạch → start lại → healthy → dữ liệu nguyên vẹn.
+   - Restart-desktop: chỉ khởi động lại session desktop.
+
+5. **Persistence hoàn chỉnh (write_once)**
+   - 18 file cấu hình trong `/home/user` (theme, panel, wallpaper, gtk, openbox, lxqt, code-server...) chỉ ghi khi CHƯA tồn tại → tùy biến của người dùng (hình nền, giao diện...) sống qua mọi lần restart/reboot/redeploy có volume.
+   - Đã test: marker file + wallpaper custom + config đều nguyên vẹn qua docker restart.
+
+### Ghi chú test
+
+| Test | Kết quả |
+|------|---------|
+| Auth RFB qua WS sau reboot | PASS |
+| Thiết bị 2 auth ngay khi thiết bị 1 chết đột ngột | PASS (0.0s) |
+| 3 thiết bị auth song song | PASS |
+| Không sót kết nối ESTABLISHED sau các phiên | PASS |
+| Upload ảnh hợp lệ / chặn file giả mạo | PASS |
+| Preset neon apply → config + CURRENT marker | PASS |
+| Reboot: backup → exit 0 → start lại healthy + data nguyên | PASS |
+
 ## 2026-08-25 (2) — LXQt desktop + multi-device
 
 ### Thêm mới

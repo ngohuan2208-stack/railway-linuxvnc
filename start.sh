@@ -54,6 +54,15 @@ blog() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /var/log/boot.log
 }
 
+# Write default config ONLY if missing -> user customizations (wallpaper,
+# panel, themes...) survive container restarts on a persistent volume.
+write_once() {
+    local f="$1"
+    if [ -f "$f" ]; then return 0; fi
+    mkdir -p "$(dirname "$f")"
+    cat > "$f"
+}
+
 blog "[BOOT] Railway Linux Desktop starting"
 
 # ---------------- TIMEZONE ----------------
@@ -102,7 +111,7 @@ if [ "$VNC_PASSWORD" = "railwaylinux" ]; then
 fi
 export VNC_PASSWORD VNC_PASSWORD_DEFAULTED
 
-cat > /home/user/.vnc/xstartup << 'XSTARTUP'
+write_once /home/user/.vnc/xstartup << 'XSTARTUP'
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
@@ -153,9 +162,15 @@ fi
 RUNDESKTOP
 chmod +x /usr/local/bin/run-desktop.sh
 
+# ---------------- WALLPAPER PRESETS (sinh dong, pre-built in image) --------
+if [ -d /opt/wallpapers ]; then
+    mkdir -p /home/user/.wallpapers/presets
+    cp -n /opt/wallpapers/*.png /home/user/.wallpapers/presets/ 2>/dev/null || true
+fi
+
 # ---------------- XFCE PERFORMANCE (only for DESKTOP=xfce) ----------------
 mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml
-cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM4'
+write_once /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM4'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfwm4" version="1.0">
   <property name="general" type="empty">
@@ -173,7 +188,7 @@ XFWM4
 # ---------------- LXQT CONFIG (only for DESKTOP=lxqt) ----------------
 if [ "$DESKTOP" = "lxqt" ]; then
     mkdir -p /home/user/.config/lxqt /home/user/.config/openbox
-    cat > /home/user/.config/lxqt/lxqt.conf << 'LXQT'
+    write_once /home/user/.config/lxqt/lxqt.conf << 'LXQT'
 [General]
 theme=dark
 icon_theme=Papirus-Dark
@@ -181,7 +196,7 @@ style=fusion
 single_click_activate=false
 LXQT
 
-    cat > /home/user/.config/lxqt/session.conf << 'LXSESS'
+    write_once /home/user/.config/lxqt/session.conf << 'LXSESS'
 [General]
 __userfile__=true
 window_manager=openbox
@@ -199,7 +214,7 @@ LXSESS
     done
 
     # Arc-Dark window decorations, no compositor, no shadows
-    cat > /home/user/.config/openbox/lxqt-rc.xml << 'OBRC'
+    write_once /home/user/.config/openbox/lxqt-rc.xml << 'OBRC'
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
   <theme>
@@ -211,9 +226,16 @@ LXSESS
   </placement>
 </openbox_config>
 OBRC
+
+    # pcmanfm-qt desktop wallpaper default (user changes preserved)
+    write_once /home/user/.config/pcmanfm-qt/lxqt/settings.conf << 'PCMANFM'
+[General]
+Wallpaper=/home/user/.wallpapers/default.png
+WallpaperMode=stretch
+PCMANFM
 fi
 
-cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml << 'XFPM'
+write_once /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml << 'XFPM'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-power-manager" version="1.0">
   <property name="xfce4-power-manager" type="empty">
@@ -227,7 +249,7 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xm
 XFPM
 
 # Disable screen blanking inside the X session (24/7 visibility)
-cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml << 'XSS'
+write_once /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml << 'XSS'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-screensaver" version="1.0">
   <property name="saver" type="empty">
@@ -241,13 +263,13 @@ XSS
 
 # ---------------- DOCK PANEL ----------------
 mkdir -p /home/user/.config/xfce4/panel
-cat > /home/user/.config/xfce4/panel/whiskermenu-1.rc << 'WHISKER'
+write_once /home/user/.config/xfce4/panel/whiskermenu-1.rc << 'WHISKER'
 [button]
 style=3
 custom-name=Applications
 WHISKER
 
-cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml << 'PANEL'
+write_once /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml << 'PANEL'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-panel" version="1.0">
   <property name="configver" type="int" value="2"/>
@@ -310,7 +332,7 @@ PANEL
 
 # ---------------- GTK THEME (dark) ----------------
 mkdir -p /home/user/.config/gtk-3.0
-cat > /home/user/.config/gtk-3.0/settings.ini << 'GTK3'
+write_once /home/user/.config/gtk-3.0/settings.ini << 'GTK3'
 [Settings]
 gtk-theme-name=Arc-Dark
 gtk-icon-theme-name=Papirus-Dark
@@ -322,14 +344,14 @@ gtk-button-images=0
 gtk-menu-images=0
 GTK3
 
-cat > /home/user/.gtkrc-2.0 << 'GTK2'
+write_once /home/user/.gtkrc-2.0 << 'GTK2'
 gtk-theme-name="Arc-Dark"
 gtk-icon-theme-name="Papirus-Dark"
 gtk-font-name="DejaVu Sans 10"
 GTK2
 
 # ---------------- WALLPAPER ----------------
-mkdir -p /home/user/.wallpapers
+mkdir -p /home/user/.wallpapers/presets
 if [ ! -f /home/user/.wallpapers/default.png ]; then
     if [ -f /opt/wallpaper.png ]; then
         cp -f /opt/wallpaper.png /home/user/.wallpapers/default.png 2>/dev/null || true
@@ -338,7 +360,7 @@ if [ ! -f /home/user/.wallpapers/default.png ]; then
     fi
 fi
 
-cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << 'WALLPAPER'
+write_once /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << 'WALLPAPER'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-desktop" version="1.0">
   <property name="backdrop" type="empty">
@@ -359,7 +381,7 @@ WALLPAPER
 
 # ---------------- ONBOARD ----------------
 mkdir -p /home/user/.config/onboard
-cat > /home/user/.config/onboard/onboard.conf << 'ONBOARD'
+write_once /home/user/.config/onboard/onboard.conf << 'ONBOARD'
 [com Canonical Onboard]
 theme = 'Dark'
 gtk theme = 'Dark'
@@ -372,13 +394,13 @@ ONBOARD
 
 # ---------------- PULSEAUDIO (only when ENABLE_AUDIO=1) ----------------
 mkdir -p /home/user/.config/pulse
-cat > /home/user/.config/pulse/default.pa << 'PULSE'
+write_once /home/user/.config/pulse/default.pa << 'PULSE'
 .include /etc/pulse/default.pa
 PULSE
 
 # ---------------- CODE-SERVER (lazy started via UI) ----------------
 mkdir -p /home/user/.config/code-server
-cat > /home/user/.config/code-server/config.yaml << 'CODESERVER'
+write_once /home/user/.config/code-server/config.yaml << 'CODESERVER'
 bind-addr: 127.0.0.1:8443
 auth: none
 cert: false
@@ -387,7 +409,7 @@ CODESERVER
 # ---------------- CHROMIUM ----------------
 mkdir -p /home/user/.config/chromium/Default
 if [ ! -f /home/user/.config/chromium/Default/Preferences ]; then
-cat > /home/user/.config/chromium/Default/Preferences << 'CHROMIUM'
+write_once /home/user/.config/chromium/Default/Preferences << 'CHROMIUM'
 {
   "hardware_acceleration_mode": {"enabled": false},
   "browser": {"check_default_browser": false},
@@ -399,7 +421,7 @@ fi
 # ---------------- FIREFOX ----------------
 mkdir -p /home/user/.mozilla/firefox/default-release
 if [ ! -f /home/user/.mozilla/firefox/default-release/user.js ]; then
-cat > /home/user/.mozilla/firefox/default-release/user.js << 'FIREFOX'
+write_once /home/user/.mozilla/firefox/default-release/user.js << 'FIREFOX'
 user_pref("media.hardware-video-decoding.force-enabled", false);
 user_pref("gfx.webrender.all", true);
 user_pref("media.ffmpeg.vaapi.enabled", false);

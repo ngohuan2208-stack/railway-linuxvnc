@@ -12,9 +12,11 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 
 import aiohttp
@@ -36,9 +38,24 @@ NOVNC_DIR = "/usr/share/novnc"
 STATIC_DIR = "/srv"
 OPTIMIZER_BIN = "/usr/local/bin/optimize-system"
 OPTIMIZER_LOG = "/var/log/optimizer.log"
+WALLPAPER_DIR = "/home/user/.wallpapers"
+PRESET_DIR = os.path.join(WALLPAPER_DIR, "presets")
+WALLPAPER_GEN = "/usr/local/bin/wallpaper-gen.py"
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
+# name -> (r1,g1,b1,r2,g2,b2) gradient presets ("sinh dong")
+WALLPAPER_PRESETS = {
+    "midnight": (10, 14, 23, 30, 41, 59),
+    "aurora": (13, 115, 119, 88, 28, 135),
+    "sunset": (194, 65, 12, 190, 24, 93),
+    "ocean": (8, 47, 73, 6, 182, 212),
+    "neon": (76, 29, 149, 236, 72, 153),
+    "forest": (6, 58, 40, 16, 185, 129),
+}
 
 PORT = int(os.environ.get("PORT", "8080"))
 VNC_CONNECT_WINDOW = int(os.environ.get("VNC_CONNECT_WINDOW", "120"))
+VNC_IDLE_TIMEOUT = int(os.environ.get("VNC_IDLE_TIMEOUT", "30"))
 BOOT_GRACE_SEC = int(os.environ.get("BOOT_GRACE_SEC", "240"))
 PROCESS_START = time.time()
 
@@ -561,7 +578,7 @@ async def vnc_ws_handler(request):
       connect deadline).
     """
     ws_server = web.WebSocketResponse(max_msg_size=0, compress=False,
-                                      heartbeat=30, autoping=True)
+                                      heartbeat=15, autoping=True)
     await ws_server.prepare(request)
 
     deadline = time.time() + max(10, VNC_CONNECT_WINDOW)
@@ -604,16 +621,29 @@ async def vnc_ws_handler(request):
     async def vnc_to_client():
         try:
             while True:
-                data = await reader.read(65536)
+                # Idle timeout: real noVNC clients poll for updates every
+                # second, so total silence in BOTH directions means a dead
+                # peer. Without this, leaked VNC connections pile up and
+                # TigerVNC stops serving new handshakes.
+                data = await asyncio.wait_for(
+                    reader.read(65536), timeout=VNC_IDLE_TIMEOUT)
                 if not data:
                     break
                 await ws_server.send_bytes(data)
+        except asyncio.TimeoutError:
+            log.info("VNC bridge idle timeout, closing")
         except Exception:
             pass
 
     t1 = asyncio.create_task(client_to_vnc())
     t2 = asyncio.create_task(vnc_to_client())
-    await asyncio.gather(t1, t2, return_exceptions=True)
+    # Tear down as soon as EITHER side finishes; cancel the sibling so no
+    # zombie VNC connection survives a vanished browser.
+    done, pending = await asyncio.wait({t1, t2},
+                                       return_when=asyncio.FIRST_COMPLETED)
+    for t in pending:
+        t.cancel()
+    await asyncio.gather(*done, *pending, return_exceptions=True)
 
     for t in (t1, t2):
         if not t.done():
@@ -847,6 +877,218 @@ async def optimize_stream(request):
     return resp
 
 
+# ---------------------------------------------------------------- wallpaper
+
+def _run_as_user_bg(cmd):
+    """Run a shell command as the desktop user inside the X session."""
+    try:
+        subprocess.Popen(
+            ["su", "-", "user", "-c", "export DISPLAY=:1; " + cmd],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL)
+    except Exception as e:
+        log.warning("run_as_user failed: %s", type(e).__name__)
+
+
+def _apply_wallpaper(path):
+    de = os.environ.get("DESKTOP", "lxqt")
+    safe = shlex.quote(path)
+    if de == "xfce":
+        prop = "/backdrop/screen0/monitor0/workspace0/last-image"
+        _run_as_user_bg(
+            "timeout 10 xfconf-query -c xfce4-desktop -p " + prop +
+            " -t string -s " + safe + " --create -n")
+    else:
+        # LXQt: pcmanfm-qt desktop wallpaper
+        conf = "/home/user/.config/pcmanfm-qt/lxqt/settings.conf"
+        os.makedirs(os.path.dirname(conf), exist_ok=True)
+        try:
+            if os.path.exists(conf):
+                with open(conf) as f:
+                    lines = [l for l in f.readlines()
+                             if not l.startswith(("Wallpaper=", "WallpaperMode="))]
+                if not any(l.strip() == "[General]" for l in lines):
+                    lines.insert(0, "[General]\n")
+            else:
+                lines = ["[General]\n"]
+            lines.append("Wallpaper=" + path + "\n")
+            lines.append("WallpaperMode=stretch\n")
+            tmp = conf + ".tmp"
+            with open(tmp, "w") as f:
+                f.writelines(lines)
+            os.replace(tmp, conf)
+            subprocess.run(["chown", "user:user", conf], timeout=5)
+        except Exception as e:
+            log.warning("pcmanfm wallpaper config: %s", type(e).__name__)
+            return False
+        subprocess.run(["pkill", "-f", "pcmanfm-qt"], timeout=5)
+        time.sleep(0.6)
+        _run_as_user_bg("exec pcmanfm-qt --desktop >/dev/null 2>&1 &")
+    try:
+        with open(os.path.join(WALLPAPER_DIR, "CURRENT"), "w") as f:
+            f.write(path)
+    except Exception:
+        pass
+    return True
+
+
+def current_wallpaper():
+    try:
+        with open(os.path.join(WALLPAPER_DIR, "CURRENT")) as f:
+            p = f.read().strip()
+            if p and os.path.isfile(p):
+                return p
+    except Exception:
+        pass
+    return ""
+
+
+async def wallpaper_list(request):
+    presets = []
+    for name in WALLPAPER_PRESETS:
+        p = os.path.join(PRESET_DIR, name + ".png")
+        presets.append({"name": name, "exists": os.path.isfile(p),
+                        "colors": WALLPAPER_PRESETS[name]})
+    cpath = ""
+    for ext in (".png", ".jpg", ".gif", ".webp"):
+        cand = os.path.join(WALLPAPER_DIR, "custom" + ext)
+        if os.path.isfile(cand):
+            cpath = cand
+            break
+    return web.json_response({
+        "presets": presets, "custom": cpath, "current": current_wallpaper()})
+
+
+async def wallpaper_preset(request):
+    try:
+        body = await request.json()
+        name = str(body.get("name", ""))
+    except Exception:
+        return web.json_response({"status": "error",
+                                  "msg": "bad request"}, status=400)
+    if name not in WALLPAPER_PRESETS:
+        return web.json_response({"status": "error",
+                                  "msg": "unknown preset"}, status=404)
+    os.makedirs(PRESET_DIR, exist_ok=True)
+    out = os.path.join(PRESET_DIR, name + ".png")
+    res = (os.environ.get("RESOLUTION", "1600x900") or "1600x900").split("x")
+    w, h = int(res[0]), int(res[1])
+    cmd = ["python3", WALLPAPER_GEN, out, str(w), str(h)] + \
+        [str(c) for c in WALLPAPER_PRESETS[name]]
+    try:
+        r = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT)
+        await asyncio.wait_for(r.wait(), timeout=30)
+    except Exception as e:
+        log.warning("preset gen failed: %s", type(e).__name__)
+        return web.json_response({"status": "error",
+                                  "msg": "generate failed"}, status=500)
+    if r.returncode != 0 or not os.path.isfile(out):
+        return web.json_response({"status": "error",
+                                  "msg": "generate failed"}, status=500)
+    ok = _apply_wallpaper(out)
+    return web.json_response({"status": "applied" if ok else "error",
+                              "wallpaper": out})
+
+
+MAGIC = [(b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"),
+         (b"GIF8", ".gif")]
+
+
+def _image_ext(data):
+    for sig, ext in MAGIC:
+        if data.startswith(sig):
+            return ext
+    if data[:4] == b"RIFF" and len(data) >= 12 and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+async def wallpaper_upload(request):
+    try:
+        reader = await request.multipart()
+    except Exception:
+        return web.json_response({"status": "error",
+                                  "msg": "multipart required"}, status=400)
+    field = None
+    while True:
+        part = await reader.next()
+        if part is None:
+            break
+        if getattr(part, "name", "") == "file":
+            field = part
+            break
+    if field is None:
+        return web.json_response({"status": "error",
+                                  "msg": "file field missing"}, status=400)
+    data = bytearray()
+    while True:
+        chunk = await field.read_chunk(65536)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > MAX_UPLOAD_BYTES:
+            return web.json_response({"status": "error",
+                                      "msg": "too large (max 8MB)"}, status=413)
+    ext = _image_ext(bytes(data[:16]))
+    if not ext:
+        return web.json_response({"status": "error",
+                                  "msg": "not an image"}, status=400)
+    for old in ("custom.png", "custom.jpg", "custom.gif", "custom.webp"):
+        p = os.path.join(WALLPAPER_DIR, old)
+        if old != "custom" + ext and os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+    out = os.path.join(WALLPAPER_DIR, "custom" + ext)
+    try:
+        with open(out, "wb") as f:
+            f.write(bytes(data))
+        subprocess.run(["chown", "user:user", out], timeout=5)
+    except Exception:
+        return web.json_response({"status": "error",
+                                  "msg": "save failed"}, status=500)
+    ok = _apply_wallpaper(out)
+    return web.json_response({"status": "applied" if ok else "error",
+                              "wallpaper": out})
+
+# ---------------------------------------------------------------- power
+
+async def system_power(request):
+    """Restart the desktop session or reboot the whole container.
+
+    Requires confirm=really to avoid accidental triggers.
+    Reboot: backup -> supervisorctl shutdown -> container exits ->
+    Railway ALWAYS policy restarts it with data intact on the volume.
+    """
+    action = request.match_info.get("action", "")
+    if request.query.get("confirm", "") != "really":
+        return web.json_response({"status": "error",
+                                  "msg": "missing confirm"}, status=400)
+    if action == "restart-desktop":
+        subprocess.Popen(["supervisorctl", "restart", "desktop"],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+        return web.json_response({"status": "restarting-desktop"})
+    if action == "reboot":
+        def _shutdown():
+            try:
+                if os.environ.get("AUTO_BACKUP_ON_EXIT", "1") == "1":
+                    subprocess.run(["/usr/local/bin/backup-data"],
+                                   timeout=120)
+            except Exception:
+                pass
+            time.sleep(1)
+            subprocess.run(["supervisorctl", "shutdown"], timeout=20)
+        threading.Thread(target=_shutdown, daemon=True).start()
+        return web.json_response({"status": "rebooting"})
+    return web.json_response({"status": "error",
+                              "msg": "unknown action"}, status=404)
+
+
 # ---------------------------------------------------------------- routing
 
 app = web.Application(client_max_size=8 * 1024 * 1024)
@@ -866,6 +1108,10 @@ app.router.add_post("/api/logs/clear/{name}", logs_clear)
 app.router.add_post("/api/optimize/run", optimize_run)
 app.router.add_get("/api/optimize/status", optimize_status)
 app.router.add_get("/api/optimize/stream", optimize_stream)
+app.router.add_get("/api/wallpaper/list", wallpaper_list)
+app.router.add_post("/api/wallpaper/preset", wallpaper_preset)
+app.router.add_post("/api/wallpaper/upload", wallpaper_upload)
+app.router.add_post("/api/system/{action}", system_power)
 app.router.add_route("*", "/code", code_proxy)
 app.router.add_route("*", "/code/{path:.*}", code_proxy)
 app.router.add_get("/novnc/{path:.*}", handle_novnc)

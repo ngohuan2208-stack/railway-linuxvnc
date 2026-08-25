@@ -123,6 +123,15 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 .log-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
 .log-controls{display:flex;gap:6px;margin-bottom:10px;align-items:center}
 #log-content{background:#060a13;border:1px solid var(--border);border-radius:8px;padding:10px;height:46vh;overflow:auto;font-size:10px;color:#94a3b8;white-space:pre-wrap;word-break:break-all}
+/* wallpaper picker */
+.wp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:14px}
+.wp-cell{position:relative;height:80px;border-radius:8px;border:2px solid var(--border);cursor:pointer;overflow:hidden}
+.wp-cell:hover{border-color:var(--accent)}
+.wp-cell.current{border-color:var(--green)}
+.wp-name{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);font-size:9px;padding:3px 6px;text-transform:uppercase;letter-spacing:.5px;color:#e2e8f0}
+.wp-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+#wp-preview{display:none;max-width:220px;max-height:120px;border-radius:8px;border:1px solid var(--border)}
+#wp-current-txt{font-size:10px;color:var(--dim)}
 @media(max-width:768px){
 #sidebar{display:none}
 body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left:0;top:0}
@@ -299,6 +308,16 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
         Reconnect
       </button>
     </div>
+    <div class="tool-row">
+      <button class="tool-btn" onclick="openWallpaper()">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+        Hinh nen
+      </button>
+      <button class="tool-btn" id="btn-power" onclick="rebootDesktop()">
+        <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+        Tat may
+      </button>
+    </div>
   </div>
 </div>
 
@@ -346,7 +365,11 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
         <h3>Su dung Desktop</h3>
         <p>Desktop Linux (LXQt hoac XFCE - chon bang bien DESKTOP) chay trong khung noVNC ben phai. Di chuot, ban phim hoat dong nhu PC that.</p>
         <h3>Dung nhieu thiet bi cung luc</h3>
-        <p>Mo domain tren bat ky may nao (PC, laptop, dien thoai) - tat cung thay mot desktop va cung dieu khien duoc, giong chia se man hinh. Khong gioi han so thiet bi.</p>
+        <p>Mo domain tren bat ky may nao (PC, laptop, dien thoai, ca Tivi LG/Samsung co trinh duyet) - tat cung thay mot desktop va cung dieu khien duoc. Khong gioi han so thiet bi.</p>
+        <h3>Doi hinh nen</h3>
+        <p>Nut Hinh nen o sidebar: chon 1 trong 6 gradient co san hoac upload anh cua ban (PNG/JPG toi da 8MB). Lua chon duoc luu vao volume - khong mat khi restart.</p>
+        <h3>Tat may / Khoi dong lai</h3>
+        <p>Nut Tat may o sidebar se backup du lieu roi khoi dong lai container (~30 giay). Du lieu tren volume van con nguyen khi quay lai.</p>
         <h3>Mo Terminal</h3>
         <p>Cach 1: nut Terminal o sidebar. Cach 2: menu Applications > Terminal Emulator.</p>
         <div class="code-block"><code>xfce4-terminal</code><button class="copy-btn">Copy</button></div>
@@ -362,7 +385,7 @@ drive-pull            # tai file tu Google Drive ve Desktop/Documents/Downloads<
         <div class="code-block"><code>drive-push            # day Desktop/Documents/Downloads len Google Drive
 backup-data           # tao ban backup .tar.gz trong ~/.backups</code><button class="copy-btn">Copy</button></div>
         <h3>Luu du lieu</h3>
-        <p>Luu tat ca vao /home/user. Neu gan Railway Volume tai /home thi du lieu ton tai qua cac lan redeploy. Chay backup-data dinh ky de an toan hon.</p>
+        <p>Luu tat ca vao /home/user. Neu gan Railway Volume tai /home thi du lieu ton tai qua cac lan redeploy VA qua viec tat may/mo lai: hinh nen, cai dat ung dung, code-server extensions, profile trinh duyet, file ca nhan. He thong tu backup khi tat may.</p>
       </div>
 
       <div class="g-page" id="pg-install">
@@ -513,6 +536,29 @@ MEM_LIMIT_MB=1228</code><button class="copy-btn">Copy</button></div>
   </div>
 </div>
 
+<!-- ================= WALLPAPER MODAL ================= -->
+<div class="modal" id="modal-wallpaper">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2z"/></svg>
+      Hinh nen
+      <button class="modal-close" onclick="closeModal('modal-wallpaper')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:11px;color:var(--dim);margin-bottom:10px">Chon gradient co san hoac upload anh cua ban (PNG/JPG, toi da 8MB). Lua chon duoc luu vao volume va giu nguyen sau khi restart.</p>
+      <div class="wp-grid" id="wp-presets"></div>
+      <div class="wp-upload">
+        <input type="file" id="wp-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="wpFileChosen()">
+        <button class="btn secondary" onclick="$('wp-file').click()">Chon anh tu thiet bi</button>
+        <img id="wp-preview" alt="preview">
+        <button class="btn" id="wp-upload-btn" style="display:none" onclick="wpUpload()">Ap dung anh nay</button>
+        <span id="wp-status-txt" style="font-size:11px;color:var(--dim)"></span>
+      </div>
+      <p id="wp-current-txt"></p>
+    </div>
+  </div>
+</div>
+
 <!-- ================= LOGS MODAL ================= -->
 <div class="modal" id="modal-logs">
   <div class="modal-card">
@@ -546,16 +592,61 @@ MEM_LIMIT_MB=1228</code><button class="copy-btn">Copy</button></div>
 
 <script>
 'use strict';
+/* ============================================================
+   Linux Desktop UI - ES5-compatible (works on old Smart TVs,
+   LG webOS / Netcast WebKit browsers included).
+   No async/await, no arrow functions, no template literals.
+   ============================================================ */
 var CIRC=188.5;
 
-function fmt(b){if(b==null)return'--';for(var u of['B','KB','MB','GB','TB']){if(b<1024)return b.toFixed(1)+' '+u;b/=1024}return b.toFixed(1)+' PB'}
 function $(id){return document.getElementById(id)}
+function qsa(sel){return Array.prototype.slice.call(document.querySelectorAll(sel))}
+function fmt(b){if(b==null)return'--';var u=['B','KB','MB','GB','TB'],i=0;
+  while(b>=1024&&i<u.length-1){b/=1024;i++}
+  return b.toFixed(1)+' '+u[i]}
+function fmtUp(s){var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),
+  m=Math.floor(s%3600/60),x=Math.floor(s%60);
+  return(d>0?d+'d ':'')+h+'h '+m+'m '+x+'s'}
+
+/* ---- request helper: fetch with XHR fallback (old TVs) ---- */
+function req(method,url,body,cb){
+  var done=false;
+  function finish(err,text){
+    if(done)return;done=true;
+    if(err){cb(err||1,null);return}
+    var j=null;
+    try{j=JSON.parse(text)}catch(e){}
+    cb(null,j,text);
+  }
+  if(window.fetch){
+    fetch(url,{method:method,body:body||undefined}).then(function(r){
+      return r.text().then(function(t){finish(null,t)});
+    }).catch(function(e){finish(e,null)});
+    /* watchdog: some TV browsers never call catch - timeout below */
+    setTimeout(function(){if(!done)finish('timeout',null)},20000);
+  }else{
+    try{
+      var x=new XMLHttpRequest();
+      x.open(method,url,true);
+      x.timeout=20000;
+      x.onload=function(){finish(null,x.responseText)};
+      x.onerror=function(){finish(1,null)};
+      x.ontimeout=function(){finish('timeout',null)};
+      x.send(body||null);
+    }catch(e){finish(e,null)}
+  }
+}
+function reqJSON(method,url,body,cb){
+  req(method,url,body,function(err,j){
+    cb(err,j);
+  });
+}
 
 function setGauge(id,pct,color){
   var el=document.querySelector('#'+id+' .gauge-fill');
   var txt=document.querySelector('#'+id+' .gauge-pct');
-  var offset=CIRC-(pct/100)*CIRC;
-  el.setAttribute('stroke-dashoffset',offset);
+  if(!el||!txt)return;
+  el.setAttribute('stroke-dashoffset',CIRC-(pct/100)*CIRC);
   var c=pct>85?'#ef4444':pct>60?'#f59e0b':color;
   el.setAttribute('stroke',c);
   txt.textContent=Math.round(pct)+'%';
@@ -564,12 +655,9 @@ function setGauge(id,pct,color){
 
 /* ================= STATS ================= */
 var lastUptime={sec:null,at:0};
-function fmtUp(s){
-  var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=Math.floor(s%60);
-  return(d>0?d+'d ':'')+h+'h '+m+'m '+x+'s';
-}
 function upd(){
-  fetch('/api/stats').then(function(r){return r.json()}).then(function(d){
+  reqJSON('GET','/api/stats',null,function(err,d){
+    if(err||!d)return;
     setGauge('g-cpu',d.cpu_percent,'#22c55e');
     setGauge('g-mem',d.mem_percent,'#3b82f6');
     setGauge('g-disk',d.disk_percent,'#a855f7');
@@ -583,22 +671,22 @@ function upd(){
     $('disk-used').textContent=fmt(d.disk_used);
     $('disk-total').textContent=fmt(d.disk_total);
     var ws=$('wifi-status');
-    if(d.wifi){ws.innerHTML='<span class="wifi-badge">'+d.wifi+'</span>'}else{ws.textContent='Ethernet'}
+    if(d.wifi){ws.innerHTML='<span class="wifi-badge">'+d.wifi+'</span>'}
+    else{ws.textContent='Ethernet'}
     $('net-sent').textContent=fmt(d.net_sent);
     $('net-recv').textContent=fmt(d.net_recv);
     if(typeof d.uptime_seconds==='number'){lastUptime.sec=d.uptime_seconds;lastUptime.at=Date.now()}
-    $('sys-uptime').textContent=fmtUp(d.uptime_seconds!=null?d.uptime_seconds:d.uptime||0);
+    $('sys-uptime').textContent=fmtUp(d.uptime_seconds!=null?d.uptime_seconds:0);
     $('sys-procs').textContent=d.processes;
-    /* FPS: backend does NOT fabricate FPS; show real value only, else N/A */
     $('sys-fps').textContent=(typeof d.fps==='number'&&d.fps>0)?(d.fps+' FPS'):'N/A';
     var idleS=Math.round((d.idle_ms||0)/1000);
     $('sys-idle').textContent=Math.floor(idleS/60)+'m '+idleS%60+'s';
     $('sys-mode').textContent=d.idle_suspend_enabled?('SLEEP-OK ('+(d.suspended?'SLEEPING':'ACTIVE')+')'):'24/7';
-    $('sys-mode').className='stat-value'+(!d.idle_suspend_enabled?' ok':(d.suspended?' warn':' ok'));
+    $('sys-mode').className='stat-value ok';
     $('sys-time').textContent=new Date().toLocaleTimeString();
-  }).catch(function(){});
+  });
 }
-upd();setInterval(upd,2000);
+upd();setInterval(upd,2500);
 setInterval(function(){
   if(lastUptime.sec!=null){
     $('sys-uptime').textContent=fmtUp(lastUptime.sec+Math.round((Date.now()-lastUptime.at)/1000));
@@ -606,14 +694,14 @@ setInterval(function(){
 },1000);
 
 /* ================= CONNECTION STATE MACHINE =================
-   States: starting | waiting_vnc | connecting | connected |
-           reconnecting | failed
-   Sources of truth: /health polling + live noVNC status element
-   (same-origin iframe, element #noVNC_status).                    */
-var connState='starting';
+   starting | waiting_vnc | connecting | connected |
+   reconnecting | failed
+   Sources of truth: /health + live noVNC status element.        */
+var connState='';
 var healthData=null;
 var lastNoVnc='';
-var failDetail='';
+var stuckSince=0;
+var forceReloadedOnce=false;
 
 function getNoVncText(){
   try{
@@ -624,7 +712,6 @@ function getNoVncText(){
 }
 
 function setConn(state,detail,isErr){
-  if(connState===state&&!isErr&&state!=='failed')return;
   connState=state;
   var ov=$('conn-overlay'),t=$('conn-title'),dt=$('conn-detail');
   var map={
@@ -634,7 +721,7 @@ function setConn(state,detail,isErr){
     reconnecting:['Connection lost','Mat ket noi - dang tu dong ket noi lai...'],
     failed:['Failed','']
   };
-  if(state==='connected'){ov.classList.add('hidden');return}
+  if(state==='connected'){ov.classList.add('hidden');stuckSince=0;forceReloadedOnce=false;return}
   ov.classList.remove('hidden');
   var m=map[state]||map.starting;
   t.textContent=m[0];
@@ -648,7 +735,7 @@ function setConn(state,detail,isErr){
 
 function evalConn(){
   var nv=getNoVncText();
-  if(nv!==lastNoVnc){lastNoVnc=nv}
+  if(nv!==lastNoVnc)lastNoVnc=nv;
   var h=healthData;
   if(nv.indexOf('Connected')===0){setConn('connected');return}
   if(h){
@@ -658,13 +745,10 @@ function evalConn(){
       return;
     }
     if(nv.indexOf('Connecting')===0){setConn('connecting');return}
-    if(v!=='ready'){
-      setConn('waiting_vnc');return;
-    }
+    if(v!=='ready'){setConn('waiting_vnc');return}
     if(nv.indexOf('Disconnect')===0||nv.indexOf('Failed')>=0){
       setConn('reconnecting');return;
     }
-    if(nv===''){setConn('connecting');return}
     setConn('connecting');
     return;
   }
@@ -672,15 +756,29 @@ function evalConn(){
 }
 
 function pollHealth(){
-  fetch('/health').then(function(r){return r.json().then(function(j){j.__code=r.status;return j})}).then(function(h){
+  reqJSON('GET','/health',null,function(err,h){
+    if(err){
+      setConn('failed','Khong truy cap duoc HTTP server. Dang cho tu phuc hoi...',true);
+      setTimeout(function(){location.reload()},10000);
+      return;
+    }
     healthData=h;
     renderServices(h);
     evalConn();
-  }).catch(function(){
-    /* HTTP server itself unreachable */
-    setConn('failed','Khong truy cap duoc HTTP server. Dang cho tu phuc hoi...',true);
-    setTimeout(function(){location.reload()},8000);
+    autoRecoverTick();
   });
+}
+
+/* Auto-recovery: if stuck in reconnecting/failed too long, reload the
+   noVNC iframe once by itself; afterwards a manual press is needed.     */
+function autoRecoverTick(){
+  if(connState==='reconnecting'||connState==='failed'){
+    if(!stuckSince)stuckSince=Date.now();
+    if(!forceReloadedOnce&&Date.now()-stuckSince>30000){
+      forceReloadedOnce=true;stuckSince=0;
+      reconnectVNC();
+    }
+  }else{stuckSince=0}
 }
 
 function renderServices(h){
@@ -689,71 +787,78 @@ function renderServices(h){
            'stopped':'starting','failed':'failed','suspended':'warning'};
   var lbl={'ready':'READY','starting':'STARTING','waiting':'STARTING',
            'stopped':'STOPPED','failed':'FAILED','suspended':'WARNING'};
-  [['http','svc-http'],['vnc','svc-vnc'],['desktop','svc-desktop'],
-   ['websocket','svc-websocket'],['code_server','svc-code_server']].forEach(function(p){
-    var c=h.components[p[0]];
+  var rows=[['http','svc-http'],['vnc','svc-vnc'],['desktop','svc-desktop'],
+            ['websocket','svc-websocket'],['code_server','svc-code_server']];
+  for(var i=0;i<rows.length;i++){
+    var c=h.components[rows[i][0]];
     var st=c?c.state:'unknown';
-    var el=$(p[1]);
-    el.textContent=lbl[st]||st.toUpperCase();
+    var el=$(rows[i][1]);
+    if(!el)continue;
+    el.textContent=lbl[st]||String(st).toUpperCase();
     el.className='svc-chip '+(cls[st]||'starting');
-  });
+  }
 }
 pollHealth();setInterval(pollHealth,3000);
 
+/* When a phone/TV suspends the tab, sockets die silently on wake. */
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden){
+    pollHealth();
+    if(connState==='reconnecting'||connState==='failed'){
+      reconnectVNC();
+    }
+  }
+});
+
 function reconnectVNC(){
   var f=$('vnc-frame');
-  if(f.src==='about:blank'){loadVNCFrame();return}
-  var base=f.src.split('&_r=')[0];
+  if(!f.src||f.src==='about:blank'||f.src.indexOf('vnc.html')<0){loadVNCFrame();return}
   setConn('reconnecting');
-  f.src=base+'&_r='+Date.now();
+  f.src=f.src.split('&_r=')[0]+'&_r='+Date.now();
 }
 
 /* ================= VNC IFRAME BOOTSTRAP =================
-   Build the noVNC URL after fetching session info. The default
-   password is auto-filled for seamless login; custom passwords
-   are NEVER sent to the browser (noVNC prompts instead).      */
+   Default password is auto-filled for seamless login; custom
+   passwords are NEVER sent to the browser (noVNC prompts).   */
 var vncBase='/novnc/vnc.html?autoconnect=true&resize=scale&quality=9&compression=6&reconnect=true&reconnect_delay=2000&path=websockify';
 function loadVNCFrame(){
-  fetch('/api/session').then(function(r){return r.json()}).then(function(s){
+  reqJSON('GET','/api/session',null,function(err,s){
     var url=vncBase;
     if(s&&s.password){url+='&password='+encodeURIComponent(s.password)}
     $('vnc-frame').src=url;
-  }).catch(function(){
-    $('vnc-frame').src=vncBase;
   });
 }
 loadVNCFrame();
 
 /* ================= APP LAUNCHERS ================= */
 function launchApp(name,btn){
-  if(btn){btn.classList.add('active');setTimeout(function(){btn.classList.remove('active')},1200)}
-  fetch('/api/apps/'+name,{method:'POST'}).catch(function(){});
+  if(btn){btn.className+=' active';setTimeout(function(){btn.className=btn.className.replace(/ active/g,'')},1200)}
+  req('POST','/api/apps/'+name,null,function(){});
 }
 
-async function openVSCode(btn){
+function openVSCode(btn){
   var old=btn.innerHTML;
   btn.disabled=true;
   btn.innerHTML='Dang khoi dong...';
-  try{
-    var r=await fetch('/api/start/code-server',{method:'POST'});
-    var j=await r.json();
-    if(j.status==='ready'||j.status==='starting'){
-      /* wait until component reports ready before opening (max ~35s) */
-      var tries=0;
-      while(tries++<23){
-        await new Promise(function(res){setTimeout(res,1500)});
-        try{
-          var h=await(await fetch('/health')).json();
-          if(h.components&&h.components.code_server.state==='ready')break;
-        }catch(e){}
-      }
-      window.open('/code/','_blank');
-    }else{
-      alert('Khong khoi dong duoc code-server ('+(j.msg||j.status)+'). Xem Logs > code-server.');
+  function finish(ok){
+    btn.disabled=false;btn.innerHTML=old;
+    if(ok)window.open('/code/','_blank');
+  }
+  reqJSON('POST','/api/start/code-server',null,function(err,j){
+    if(err||!j||(j.status!=='ready'&&j.status!=='starting')){
+      alert('Khong khoi dong duoc code-server ('+((j&&j.msg)||j&&(j.status)||'loi')+'). Xem Logs > code-server.');
+      finish(false);return;
     }
-  }catch(e){alert('Loi ket noi khi khoi dong VS Code')}
-  btn.disabled=false;
-  btn.innerHTML=old;
+    var tries=0;
+    var timer=setInterval(function(){
+      tries++;
+      reqJSON('GET','/health',null,function(e2,h){
+        if(h&&h.components&&h.components.code_server.state==='ready'){
+          clearInterval(timer);finish(true);
+        }else if(tries>23){clearInterval(timer);finish(true)}
+      });
+    },1500);
+  });
 }
 
 /* keyboard overlay */
@@ -761,42 +866,34 @@ var kbVisible=false;
 function toggleKeyboard(){
   kbVisible=!kbVisible;
   var o=$('onboard-overlay'),f=$('onboard-frame'),b=$('btn-keyboard');
-  if(kbVisible){o.classList.add('show');b.classList.add('active');f.src='/novnc/onboard.html'}
-  else{o.classList.remove('show');b.classList.remove('active');f.src='about:blank'}
+  if(kbVisible){o.className+=' show';b.className+=' active';f.src='/novnc/onboard.html'}
+  else{o.className=o.className.replace(/ show/g,'');b.className=b.className.replace(/ active/g,'');f.src='about:blank'}
 }
 
 /* ================= MODALS / GUIDE ================= */
-function openModal(id){$(id).classList.add('open')}
-function closeModal(id){$(id).classList.remove('open')}
+function openModal(id){$(id).className+=' open'}
+function closeModal(id){$(id).className=$(id).className.replace(/ open/g,'')}
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
-    ['modal-guide','modal-optimizer','modal-logs'].forEach(function(m){closeModal(m)});
-    optStopStream();logAutoOff();
+    closeModal('modal-guide');closeModal('modal-optimizer');closeModal('modal-logs');closeModal('modal-wallpaper');
+    optStopStream();
   }
 });
-document.querySelectorAll('.modal').forEach(function(m){
-  m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open')});
+qsa('.modal').forEach(function(m){
+  m.addEventListener('click',function(e){if(e.target===m)m.className=m.className.replace(/ open/g,'')});
 });
 
-document.querySelectorAll('#guide-tabs .g-tab').forEach(function(t){
+qsa('#guide-tabs .g-tab').forEach(function(t){
   t.addEventListener('click',function(){
-    document.querySelectorAll('#guide-tabs .g-tab').forEach(function(x){x.classList.remove('active')});
-    document.querySelectorAll('.g-page').forEach(function(x){x.classList.remove('active')});
-    t.classList.add('active');
-    $(t.dataset.page).classList.add('active');
+    qsa('#guide-tabs .g-tab').forEach(function(x){x.className=x.className.replace(/ active/g,'')});
+    qsa('.g-page').forEach(function(x){x.className=x.className.replace(/ active/g,'')});
+    t.className+=' active';
+    var pg=$(t.getAttribute('data-page'));
+    if(pg)pg.className+=' active';
   });
 });
 
 /* copy buttons (event delegation) */
-document.addEventListener('click',function(e){
-  if(e.target.classList&&e.target.classList.contains('copy-btn')){
-    var code=e.target.parentElement.querySelector('code').textContent.trim();
-    var done=function(){e.target.textContent='Copied';setTimeout(function(){e.target.textContent='Copy'},1200)};
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(code).then(done).catch(function(){fallbackCopy(code);done()});
-    }else{fallbackCopy(code);done()}
-  }
-});
 function fallbackCopy(txt){
   var ta=document.createElement('textarea');
   ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
@@ -804,81 +901,114 @@ function fallbackCopy(txt){
   try{document.execCommand('copy')}catch(e){}
   document.body.removeChild(ta);
 }
+document.addEventListener('click',function(e){
+  var t=e.target||e.srcElement;
+  if(t.className&&String(t.className).indexOf('copy-btn')>=0){
+    var code=t.parentElement.querySelector('code').textContent;
+    code=code.replace(/^\s+|\s+$/g,'');
+    function done(){t.textContent='Copied';setTimeout(function(){t.textContent='Copy'},1200)}
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(done,function(){fallbackCopy(code);done()});
+    }else{fallbackCopy(code);done()}
+  }
+});
 
 /* ================= OPTIMIZER ================= */
-var optSource=null;
+var optSource=null,optPollTimer=null;
 function openOptimizer(){openModal('modal-optimizer');optRefreshStatus()}
-function closeModalAndOpt(){closeModal('modal-optimizer');optStopStream()}
 
-function markStep(n,state){
-  var li=document.querySelector('#opt-steps li[data-step="'+n+'"]');
-  if(li)li.className=state;
-}
 function resetSteps(){
-  document.querySelectorAll('#opt-steps li').forEach(function(li){li.className=''});
-  $('opt-log').style.display='none';$('opt-log').textContent='';
+  qsa('#opt-steps li').forEach(function(li){li.className=''});
+  $('opt-log').style.display='none';$('opt-log').innerHTML='';
   $('opt-result').style.display='none';
+}
+function markStepsUpTo(n,state){
+  qsa('#opt-steps li').forEach(function(li){
+    var s=parseInt(li.getAttribute('data-step'));
+    if(s<n)li.className='done';else if(s===n)li.className=state;
+  });
+}
+function appendOptLine(line){
+  var logEl=$('log-content')&&$('opt-log');
+  logEl.textContent+=line+'\n';
+  logEl.scrollTop=logEl.scrollHeight;
+}
+
+function optHandleLine(line){
+  appendOptLine(line);
+  var m=line.match(/\[(\d)\/9\]/);
+  if(m){markStepsUpTo(parseInt(m[1]),'active')}
+  else{
+    var act=null,i;
+    var lis=qsa('#opt-steps li');
+    for(i=0;i<lis.length;i++){if(lis[i].className.indexOf('active')>=0){act=lis[i];break}}
+    if(act&&(line.indexOf('OK:')>=0||line.indexOf('[DRY-RUN] would')>=0))act.className='done';
+  }
+  if(line.indexOf('completed dry_run=')>=0){
+    qsa('#opt-steps li').forEach(function(li){li.className='done'});
+  }
+  if(line.indexOf('OPT_RESULT_JSON:')===0){
+    try{showOptResult(JSON.parse(line.substring(16)))}catch(e){}
+  }
 }
 
 function optRefreshStatus(){
-  fetch('/api/optimize/status').then(function(r){return r.json()}).then(function(j){
-    if(j.running){$('opt-run').disabled=true;$('opt-status-txt').textContent='Dang chay...'}
-    else{$('opt-run').disabled=false;$('opt-status-txt').textContent=j.result?'Hoan thanh':'San sang'}
-  }).catch(function(){});
+  reqJSON('GET','/api/optimize/status',null,function(err,j){
+    if(err||!j)return;
+    $('opt-run').disabled=!!j.running;
+    $('opt-status-txt').textContent=j.running?'Dang chay...':(j.result?'Hoan thanh':'San sang');
+    if(j.result&&!j.running)showOptResult(j.result);
+  });
 }
 
-async function optRun(){
-  var dry=$('opt-dryrun').checked;
+function optRun(){
+  var dry=$('opt-dryrun').checked?'1':'0';
   resetSteps();
   $('opt-run').disabled=true;
-  $('opt-warn').innerHTML='Dang chay'+(dry?' (DRY RUN - khong thay doi gi)':'')+
-    '. Vui long cho... Ban co the theo doi tung buoc ben duoi.';
+  $('opt-warn').innerHTML='Dang chay'+(dry==='1'?' (DRY RUN - khong thay doi gi)':'')+
+    '. Vui long cho... Theo doi tung buoc ben duoi.';
   $('opt-log').style.display='block';
   optStartStream();
-  try{
-    var r=await fetch('/api/optimize/run?dry_run='+(dry?'1':'0'),{method:'POST'});
-    var j=await r.json();
-    if(r.status!==200){$('opt-status-txt').textContent=j.status||'loi'}
-  }catch(e){$('opt-status-txt').textContent='Loi ket noi'}
+  reqJSON('POST','/api/optimize/run?dry_run='+dry,null,function(err,j){
+    if(err)$('opt-status-txt').textContent='Loi ket noi';
+  });
 }
 
 function optStartStream(){
   optStopStream();
-  optSource=new EventSource('/api/optimize/stream');
-  optSource.onmessage=function(ev){
-    if(ev.data==='__END__'){optStopStream();return}
-    var entry;
-    try{entry=JSON.parse(ev.data)}catch(e){return}
-    var line=entry.line||'';
-    var logEl=$('opt-log');
-    logEl.textContent+=line+'\n';
-    logEl.scrollTop=logEl.scrollHeight;
-    var m=line.match(/\[(\d)\/9\]/);
-    if(m){
-      var n=parseInt(m[1]);
-      document.querySelectorAll('#opt-steps li').forEach(function(li){
-        var s=parseInt(li.dataset.step);
-        if(s<n)li.className='done';else if(s===n)li.className='active';
-      });
-      if(line.toLowerCase().indexOf('ok:')>=0||line.indexOf('OK:')>=0)markStep(n,'done');
-    }else{
-      /* step completion lines like "OK: ..." belong to previous active step */
-      var act=document.querySelector('#opt-steps li.active');
-      if(act&&(line.indexOf('OK:')>=0||line.indexOf('[DRY-RUN] would')>=0))act.className='done';
-    }
-    if(line.indexOf('completed dry_run=')>=0){
-      document.querySelectorAll('#opt-steps li').forEach(function(li){li.className='done'});
-    }
-    if(line.indexOf('OPT_RESULT_JSON:')===0){
-      try{
-        var res=JSON.parse(line.substring('OPT_RESULT_JSON:'.length));
-        showOptResult(res);
-      }catch(e){}
-    }
-  };
-  optSource.onerror=function(){/* stream ends naturally */};
+  if(window.EventSource){
+    try{
+      optSource=new EventSource('/api/optimize/stream');
+      optSource.onmessage=function(ev){
+        if(ev.data==='__END__'){optStopStream();return}
+        var entry;
+        try{entry=JSON.parse(ev.data)}catch(e){return}
+        if(entry&&entry.line)optHandleLine(entry.line);
+      };
+      optSource.onerror=function(){};
+      return;
+    }catch(e){optSource=null}
+  }
+  /* fallback: poll status+log while running (old TVs without SSE) */
+  optPollTimer=setInterval(function(){
+    reqJSON('GET','/api/optimize/status',null,function(err,j){
+      if(!j)return;
+      if(!j.running){
+        clearInterval(optPollTimer);optPollTimer=null;
+        reqJSON('GET','/api/logs/view/optimizer?lines=120',null,function(e2,l){
+          if(l&&l.content){
+            var lines=l.content.split('\n');
+            for(var i=0;i<lines.length;i++)optHandleLine(lines[i]);
+          }
+        });
+      }
+    });
+  },2000);
 }
-function optStopStream(){if(optSource){optSource.close();optSource=null}}
+function optStopStream(){
+  if(optSource){try{optSource.close()}catch(e){}optSource=null}
+  if(optPollTimer){clearInterval(optPollTimer);optPollTimer=null}
+}
 
 function showOptResult(res){
   optStopStream();
@@ -891,7 +1021,7 @@ function showOptResult(res){
   $('opt-result').style.display='grid';
   $('opt-warn').innerHTML=res.dry_run
     ?'Dry run hoan thanh. Khong co gi bi thay doi. Bo tick Dry run va chay lai de ap dung.'
-    :'Toi uu hoa hoan thanh. Du lieu nguoi du lieu khong bi anh huong.';
+    :'Toi uu hoa hoan thanh. Du lieu nguoi dung khong bi anh huong.';
 }
 
 /* ================= LOGS VIEWER ================= */
@@ -899,40 +1029,172 @@ var curLog='system',logTimer=null;
 function openLogs(){
   openModal('modal-logs');
   loadLogs();
-  logAutoSetup();
-}
-function logAutoSetup(){
-  logAutoOff();
   var chk=$('log-auto');
-  var fn=function(){if(chk.checked)logTimer=setInterval(loadLogs,3000);else logAutoOff()};
-  if(!chk._bound){chk.addEventListener('change',fn);chk._bound=true}
-  if(chk.checked)logTimer=setInterval(loadLogs,3000);
+  chk.onchange=function(){
+    if(chk.checked)logTimer=setInterval(loadLogs,3000);
+    else{if(logTimer){clearInterval(logTimer);logTimer=null}}
+  };
+  if(chk.checked&&!logTimer)logTimer=setInterval(loadLogs,3000);
 }
 function logAutoOff(){if(logTimer){clearInterval(logTimer);logTimer=null}}
 
-document.querySelectorAll('#log-tabs .g-tab').forEach(function(t){
+qsa('#log-tabs .g-tab').forEach(function(t){
   t.addEventListener('click',function(){
-    document.querySelectorAll('#log-tabs .g-tab').forEach(function(x){x.classList.remove('active')});
-    t.classList.add('active');
-    curLog=t.dataset.log;
+    qsa('#log-tabs .g-tab').forEach(function(x){x.className=x.className.replace(/ active/g,'')});
+    t.className+=' active';
+    curLog=t.getAttribute('data-log');
     loadLogs();
   });
 });
 
 function loadLogs(){
   $('log-status-txt').textContent='Loading...';
-  fetch('/api/logs/view/'+curLog+'?lines=300')
-    .then(function(r){return r.json()})
-    .then(function(j){
-      $('log-content').textContent=j.content||'(trong)';
-      $('log-content').scrollTop=$('log-content').scrollHeight;
-      $('log-status-txt').textContent=curLog;
-    })
-    .catch(function(){$('log-status-txt').textContent='loi tai log'});
+  reqJSON('GET','/api/logs/view/'+curLog+'?lines=300',null,function(err,j){
+    if(err){$('log-status-txt').textContent='loi tai log';return}
+    $('log-content').textContent=(j&&j.content)||'(trong)';
+    $('log-content').scrollTop=$('log-content').scrollHeight;
+    $('log-status-txt').textContent=curLog;
+  });
 }
 function clearLog(){
-  fetch('/api/logs/clear/'+curLog,{method:'POST'}).then(loadLogs).catch(function(){});
+  req('POST','/api/logs/clear/'+curLog,null,function(){loadLogs()});
 }
+
+/* ================= WALLPAPER PICKER ================= */
+function cssGrad(c){
+  return 'linear-gradient(135deg, rgb('+c[0]+','+c[1]+','+c[2]+'), rgb('+c[3]+','+c[4]+','+c[5]+'))';
+}
+function openWallpaper(){
+  openModal('modal-wallpaper');
+  $('wp-status-txt').textContent='';
+  reqJSON('GET','/api/wallpaper/list',null,function(err,j){
+    if(err||!j)return;
+    var grid=$('wp-presets');
+    grid.innerHTML='';
+    var names=['midnight','aurora','sunset','ocean','neon','forest'];
+    var labels={midnight:'Midnight',aurora:'Aurora',sunset:'Sunset',
+                ocean:'Ocean',neon:'Neon',forest:'Forest'};
+    var i,p,c,cell,nm;
+    for(i=0;i<j.presets.length;i++){
+      p=j.presets[i];
+      c=p.colors||[30,41,59,10,14,23];
+      cell=document.createElement('div');
+      cell.className='wp-cell'+(j.current&&j.current.indexOf('/'+p.name+'.png')>=0?' current':'');
+      cell.style.background=cssGrad(c);
+      nm=document.createElement('div');
+      nm.className='wp-name';
+      nm.textContent=labels[p.name]||p.name;
+      cell.appendChild(nm);
+      (function(pname,cel){
+        cel.onclick=function(){wpApplyPreset(pname,cel)};
+      })(p.name,cell);
+      grid.appendChild(cell);
+    }
+    if(j.custom){
+      cell=document.createElement('div');
+      cell.className='wp-cell'+(j.current===j.custom?' current':'');
+      cell.style.background='#111827 center/cover';
+      cell.style.backgroundImage='url(/api/wallpaper/custom?t='+Date.now()+')';
+      nm=document.createElement('div');
+      nm.className='wp-name';nm.textContent='Anh cua ban';
+      cell.appendChild(nm);
+      grid.appendChild(cell);
+    }
+    $('wp-current-txt').textContent=j.current?('Hinh nen hien tai: '+j.current):'Chua co hinh nen tuy chinh.';
+  });
+}
+
+function wpSetStatus(t){$('wp-status-txt').textContent=t}
+
+function wpApplyPreset(name,cell){
+  wpSetStatus('Dang ap dung '+name+'...');
+  reqJSON('POST','/api/wallpaper/preset',JSON.stringify({name:name}),function(err,j){
+    if(err||!j||j.status!=='applied'){wpSetStatus('Loi ap dung.');return}
+    wpSetStatus('Da ap dung!');
+    qsa('.wp-cell').forEach(function(c){c.className=c.className.replace(/ current/g,'')});
+    cell.className+=' current';
+    $('wp-current-txt').textContent='Hinh nen hien tai: '+j.wallpaper;
+  });
+}
+
+var wpPendingData=null;
+function wpFileChosen(){
+  var inp=$('wp-file');
+  if(!inp.files||!inp.files.length)return;
+  var f=inp.files[0];
+  if(f.size>8*1024*1024){wpSetStatus('Anh qua lon (toi da 8MB).');return}
+  $('wp-upload-btn').style.display='inline-block';
+  wpSetStatus(f.name+' ('+Math.round(f.size/1024)+'KB)');
+  if(window.FileReader){
+    var rd=new FileReader();
+    rd.onload=function(e){
+      wpPendingData=e.target.result;
+      var pv=$('wp-preview');
+      pv.src=wpPendingData;pv.style.display='inline-block';
+    };
+    rd.readAsDataURL(f);
+  }
+}
+
+function wpUpload(){
+  var inp=$('wp-file');
+  if(!inp.files||!inp.files.length)return;
+  wpSetStatus('Dang tai len...');
+  var fd;
+  try{fd=new FormData()}catch(e){wpSetStatus('Trinh duyet khong ho tro upload.');return}
+  fd.append('file',inp.files[0]);
+  var sent=false;
+  function handle(j){
+    if(sent)return;sent=true;
+    if(j&&j.status==='applied'){
+      wpSetStatus('Da ap dung hinh nen moi!');
+      $('wp-upload-btn').style.display='none';
+      $('wp-preview').style.display='none';
+      openWallpaper();
+    }else{wpSetStatus((j&&j.msg)||'Upload that bai.')}
+  }
+  if(window.fetch){
+    fetch('/api/wallpaper/upload',{method:'POST',body:fd})
+      .then(function(r){return r.json()}).then(handle)
+      .catch(function(){handle(null)});
+  }else{
+    try{
+      var x=new XMLHttpRequest();
+      x.open('POST','/api/wallpaper/upload',true);
+      x.onload=function(){try{handle(JSON.parse(x.responseText))}catch(e){handle(null)}};
+      x.onerror=function(){handle(null)};
+      x.send(fd);
+    }catch(e){wpSetStatus('Trinh duyet khong ho tro upload.')}
+  }
+}
+
+/* ================= POWER ================= */
+function rebootDesktop(){
+  if(!confirm('Tat may = backup du lieu roi khoi dong lai toan bo container.\nDu lieu tren volume duoc giu nguyen. Tiep tuc?'))return;
+  if(!confirm('Xac nhan lan cuoi: tat may ngay bay gio?'))return;
+  var b=$('btn-power');
+  b.disabled=true;b.innerHTML='Dang tat may...';
+  setConn('failed','Dang backup du lieu va khoi dong lai he thong. Trang se tu tro lai sau ~30 giay...');
+  req('POST','/api/system/reboot?confirm=really',null,function(){
+    var tries=0;
+    var t=setInterval(function(){
+      tries++;
+      reqJSON('GET','/health',null,function(err,h){
+        if(!err&&h&&h.status!=='unhealthy'){
+          clearInterval(t);location.reload();
+        }else if(tries>40){clearInterval(t);location.reload()}
+      });
+    },4000);
+  });
+}
+
+function restartDesktopOnly(){
+  if(!confirm('Khoi dong lai desktop session (khong anh huong du lieu)?'))return;
+  req('POST','/api/system/restart-desktop?confirm=really',null,function(){
+    setConn('reconnecting');
+  });
+}
+
 </script>
 </body>
 </html>

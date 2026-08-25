@@ -88,8 +88,17 @@ COPY index.html /srv/index.html
 COPY wallpaper-gen.py /usr/local/bin/wallpaper-gen.py
 
 COPY start.sh /start.sh
+# Pre-generate default + gradient presets (tiny PNGs) so the wallpaper
+# picker works offline and instantly.
 RUN chmod +x /start.sh \
-    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpaper.png 1600 900
+    && mkdir -p /opt/wallpapers \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpaper.png 1600 900 \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/midnight.png 1600 900 10 14 23 30 41 59 \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/aurora.png 1600 900 13 115 119 88 28 135 \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/sunset.png 1600 900 194 65 12 190 24 93 \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/ocean.png 1600 900 8 47 73 6 182 212 \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/neon.png 1600 900 76 29 149 236 72 153 \
+    && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/forest.png 1600 900 6 58 40 16 185 129
 
 COPY supervisord.conf /etc/supervisor/supervisord.conf
 
