@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
-"""Resource watchdog: RAM <= budget, CPU cap, disk auto-clean."""
+"""Resource watchdog: RAM budget, CPU cap, disk auto-clean + service revival.
+
+Service revival policy (no infinite restart loops):
+- A service is considered DOWN only after N consecutive failed checks.
+- Restart attempts use exponential backoff: 30s * 2^fails, capped at 600s.
+- Max 6 restart attempts per rolling hour per service; beyond that it logs
+  an ERROR and waits for the window to slide.
+"""
 import os
 import subprocess
 import time
+from collections import deque
 
 import psutil
 
 MEM_LIMIT_MB = int(os.environ.get("MEM_LIMIT_MB", "1228"))
 CPU_MAX_PCT = int(os.environ.get("CPU_MAX_PCT", "85"))
 DISK_CLEAN_PCT = int(os.environ.get("DISK_CLEAN_PCT", "80"))
-CHECK_INTERVAL = int(os.environ.get("WATCHDOG_INTERVAL", "10"))
+CHECK_INTERVAL = int(os.environ.get("WATCHDOG_INTERVAL", "5"))
+
+FAIL_THRESHOLD = 2
+BACKOFF_BASE = 30
+BACKOFF_CAP = 600
+MAX_ATTEMPTS_PER_HOUR = 6
 
 PROTECTED = {
     "supervisord", "Xvnc", "dbus-daemon", "dbus-launch",
@@ -25,6 +38,10 @@ HEAVY_APPS = {
 cpu_high_since = 0
 
 
+def log(msg):
+    print(f"[watchdog] {msg}", flush=True)
+
+
 def _read_int(path):
     try:
         with open(path) as f:
@@ -34,7 +51,6 @@ def _read_int(path):
 
 
 def cgroup_mem():
-    """Return (used_bytes, limit_bytes) of THIS container, not the host."""
     cur = _read_int("/sys/fs/cgroup/memory.current")
     if cur is None:
         cur = _read_int("/sys/fs/cgroup/memory/memory.usage_in_bytes")
@@ -46,10 +62,6 @@ def cgroup_mem():
     if mx is None or mx > (1 << 50):
         mx = None
     return cur, mx
-
-
-def log(msg):
-    print(f"[watchdog] {msg}", flush=True)
 
 
 def drop_caches():
@@ -100,7 +112,7 @@ def handle_memory():
     pct_of_budget = used_mb / budget_mb * 100
 
     if pct_of_budget >= 95:
-        log(f"CRITICAL {used_mb}MB/{MEM_LIMIT_MB}MB — killing heaviest app")
+        log(f"CRITICAL {used_mb}MB/{budget_mb}MB - killing heaviest app")
         for rss, pid, name in top_by_rss():
             if name in HEAVY_APPS:
                 try:
@@ -138,7 +150,7 @@ def handle_cpu(avg):
                 if best is None or cpu > best[0]:
                     best = (cpu, p.info["pid"], n)
             if best and best[0] > 15:
-                log(f"CPU {avg:.0f}% sustained — renice {best[2]}(pid={best[1]})")
+                log(f"CPU {avg:.0f}% sustained - renice {best[2]}(pid={best[1]})")
                 renice(best[1], 19)
             cpu_high_since = now
     else:
@@ -164,15 +176,113 @@ def clean_disk():
 def handle_disk():
     d = psutil.disk_usage("/")
     if d.percent >= DISK_CLEAN_PCT:
-        log(f"disk {d.percent:.0f}% >= {DISK_CLEAN_PCT}% — cleaning")
+        log(f"disk {d.percent:.0f}% >= {DISK_CLEAN_PCT}% - cleaning")
         clean_disk()
 
 
+# ------------------------------------------------------------ svc revival
+
+def listening(port):
+    """Check LISTEN state via /proc/net/tcp - no TCP connection is opened.
+
+    Raw connect+close probes would trip Xvnc's failure blacklist and can
+    lock out real noVNC clients ('Too many security failures').
+    """
+    want = f"{port:04X}"
+    for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with open(path) as f:
+                for line in f.readlines()[1:]:
+                    parts = line.split()
+                    if len(parts) > 3 and parts[1].rsplit(":", 1)[1] == want \
+                            and parts[3] == "0A":
+                        return True
+        except Exception:
+            continue
+    return False
+
+
+def proc_alive(name):
+    for p in psutil.process_iter(["name"]):
+        if proc_name(p) == name:
+            return True
+    return False
+
+
+SERVICES = [
+    # key, supervisor name, healthy check, log tag
+    {"key": "vnc", "supervisor": "xvnc",
+     "check": lambda: listening(5901), "tag": "VNC"},
+    {"key": "desktop", "supervisor": "desktop",
+     "check": lambda: proc_alive("xfce4-session"), "tag": "XFCE"},
+    {"key": "httpserver", "supervisor": "httpserver",
+     "check": lambda: listening(int(os.environ.get("PORT", "8080"))),
+     "tag": "HTTP"},
+]
+
+svc_state = {s["key"]: {"fails": 0, "attempts": deque(),
+                        "last_attempt": 0} for s in SERVICES}
+
+
+def supervisor_action(name, action):
+    try:
+        r = subprocess.run(
+            ["supervisorctl", action, name],
+            capture_output=True, text=True, timeout=20,
+        )
+        log(f"supervisorctl {action} {name}: "
+            f"{(r.stdout or r.stderr).strip()[:120]}")
+        return r.returncode == 0
+    except Exception as e:
+        log(f"supervisorctl {action} {name} error: {type(e).__name__}")
+        return False
+
+
+def revive_services():
+    now = time.time()
+    for svc in SERVICES:
+        st = svc_state[svc["key"]]
+        if svc["check"]():
+            if st["fails"] >= FAIL_THRESHOLD:
+                log(f"[{svc['tag']}] ready (recovered)")
+            st["fails"] = 0
+            continue
+
+        st["fails"] += 1
+        if st["fails"] == FAIL_THRESHOLD:
+            log(f"[{svc['tag']}] unhealthy ({st['fails']} failed checks)")
+        if st["fails"] < FAIL_THRESHOLD:
+            continue
+
+        backoff = min(BACKOFF_BASE * (2 ** (st["fails"] - FAIL_THRESHOLD)),
+                      BACKOFF_CAP)
+        if now - st["last_attempt"] < backoff:
+            continue
+
+        # rolling-hour attempt limiter
+        while st["attempts"] and now - st["attempts"][0] > 3600:
+            st["attempts"].popleft()
+        if len(st["attempts"]) >= MAX_ATTEMPTS_PER_HOUR:
+            if now - st["last_attempt"] > 600:
+                log(f"[ERROR] [{svc['tag']}] restart limit hit "
+                    f"({len(st['attempts'])}/hour), giving up this window")
+                st["last_attempt"] = now
+            continue
+
+        log(f"[{svc['tag']}] restarting via supervisord "
+            f"(attempt {len(st['attempts']) + 1})")
+        st["attempts"].append(now)
+        st["last_attempt"] = now
+        supervisor_action(svc["supervisor"], "restart")
+
+
 def main():
-    log(f"started | mem={MEM_LIMIT_MB}MB cpu<={CPU_MAX_PCT}% disk<{DISK_CLEAN_PCT}%")
+    log(f"started | mem={MEM_LIMIT_MB}MB cpu<={CPU_MAX_PCT}% "
+        f"disk<{DISK_CLEAN_PCT}% interval={CHECK_INTERVAL}s")
     while True:
         time.sleep(CHECK_INTERVAL)
         try:
+            revive_services()
             handle_memory()
             avg = psutil.cpu_percent(interval=0.5)
             handle_cpu(avg)

@@ -17,7 +17,9 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 #sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .header .logo{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
-.header .status{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+.header .status{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 2s infinite}
+.header .status.ok{background:var(--green)}
+.header .status.bad{background:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .section{padding:10px 14px;border-bottom:1px solid var(--border)}
 .section-title{font-size:9px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
@@ -30,6 +32,13 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 .stat-value.danger{color:var(--red)}
 .stat-value.fps{color:var(--cyan)}
 .wifi-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(34,197,94,0.15);padding:1px 6px;border-radius:4px;font-size:9px;color:var(--green)}
+.svc-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:10px}
+.svc-name{color:var(--dim)}
+.svc-chip{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:600;padding:1px 7px;border-radius:4px;background:rgba(100,116,139,.15);color:var(--dim)}
+.svc-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.svc-chip.ready{background:rgba(34,197,94,.12);color:var(--green)}
+.svc-chip.starting,.svc-chip.warning{background:rgba(245,158,11,.12);color:var(--amber)}
+.svc-chip.failed{background:rgba(239,68,68,.15);color:var(--red)}
 .gauge-row{display:flex;justify-content:space-around;padding:8px 0}
 .gauge{position:relative;width:72px;height:72px}
 .gauge svg{width:72px;height:72px;transform:rotate(-90deg)}
@@ -42,15 +51,83 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 .tool-btn{width:100%;padding:8px;margin-bottom:4px;background:var(--border);border:1px solid transparent;border-radius:6px;color:var(--text);font-size:11px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s}
 .tool-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tool-btn.active{background:var(--accent);color:#fff}
-.tool-btn svg{width:14px;height:14px;fill:currentColor}
+.tool-btn svg{width:14px;height:14px;fill:currentColor;flex-shrink:0}
 .tool-row{display:flex;gap:4px}
 .tool-row .tool-btn{flex:1;margin-bottom:0}
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.tool-row+.tool-row{margin-top:4px}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;background:#05070c}
 #vnc-frame{flex:1;border:none;background:#000}
+/* ---- connection overlay ---- */
+#conn-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#070b13;z-index:40}
+#conn-overlay.hidden{display:none}
+.conn-card{text-align:center;max-width:420px;padding:24px}
+.spinner{width:36px;height:36px;margin:0 auto 16px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#conn-title{font-size:16px;font-weight:700;margin-bottom:8px}
+#conn-detail{font-size:11px;color:var(--dim);line-height:1.6;margin-bottom:16px}
+#conn-detail.err{color:var(--red)}
+#btn-reconnect{display:none;padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:12px;cursor:pointer}
+#btn-reconnect:hover{filter:brightness(1.15)}
+#conn-overlay.show-reconnect #btn-reconnect{display:inline-block}
+#conn-overlay.show-reconnect .spinner{animation:none;border-top-color:var(--amber)}
+/* ---- floating buttons ---- */
+.fab-corner{position:fixed;left:10px;bottom:10px;z-index:60;display:flex;gap:6px}
+.fab{width:auto;height:32px;padding:0 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:11px;display:flex;align-items:center;gap:6px;cursor:pointer;backdrop-filter:blur(10px);transition:all .15s}
+.fab:hover{border-color:var(--accent);color:var(--accent)}
+.fab svg{width:13px;height:13px;fill:currentColor}
+/* ---- modals ---- */
+.modal{position:fixed;inset:0;z-index:100;background:rgba(2,6,15,.75);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal.open{display:flex}
+.modal-card{width:min(860px,94vw);max-height:90vh;background:#0d1424;border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden}
+.modal-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.modal-head svg{width:14px;height:14px;fill:var(--accent)}
+.modal-close{margin-left:auto;background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;line-height:1;padding:4px}
+.modal-close:hover{color:var(--red)}
+.modal-body{overflow-y:auto;padding:16px;font-size:12px;line-height:1.7}
+.modal-body::-webkit-scrollbar{width:6px}
+.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* guide */
+.g-nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.g-tab{padding:5px 12px;background:var(--border);border:none;border-radius:6px;color:var(--dim);font-family:inherit;font-size:11px;cursor:pointer}
+.g-tab.active{background:var(--accent);color:#fff}
+.g-page{display:none}.g-page.active{display:block}
+.g-page h3{font-size:13px;color:var(--accent);margin:14px 0 6px}
+.g-page p{color:#cbd5e1;margin:6px 0;font-size:11.5px}
+.code-block{position:relative;background:#060a13;border:1px solid var(--border);border-radius:8px;padding:10px 84px 10px 12px;margin:8px 0;overflow-x:auto}
+.code-block code{font-size:11px;color:#93c5fd;white-space:pre;font-family:inherit}
+.copy-btn{position:absolute;top:6px;right:6px;padding:3px 10px;background:var(--border);border:none;border-radius:5px;color:var(--dim);font-family:inherit;font-size:10px;cursor:pointer}
+.copy-btn:hover{background:var(--accent);color:#fff}
+.note{background:rgba(59,130,246,.08);border-left:3px solid var(--accent);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0;font-size:11px}
+.warnbox{background:rgba(245,158,11,.08);border-left:3px solid var(--amber);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0;font-size:11px}
+/* optimizer */
+.opt-warning{margin-bottom:14px}
+.opt-controls{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.chk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);cursor:pointer}
+.btn{padding:8px 18px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-family:inherit;font-size:11px;cursor:pointer}
+.btn:hover{filter:brightness(1.15)}
+.btn.secondary{background:var(--border);color:var(--text)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+#opt-steps{list-style:none;margin-bottom:12px}
+#opt-steps li{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;color:var(--dim)}
+#opt-steps li::before{content:"";width:14px;height:14px;border-radius:50%;border:2px solid var(--border);flex-shrink:0}
+#opt-steps li.active{color:var(--amber)}
+#opt-steps li.active::before{border-color:var(--amber);animation:pulse 1s infinite}
+#opt-steps li.done{color:var(--text)}
+#opt-steps li.done::before{border-color:var(--green);background:var(--green)}
+#opt-log{display:none;background:#060a13;border:1px solid var(--border);border-radius:8px;padding:10px;height:180px;overflow-y:auto;font-size:10px;color:#94a3b8;white-space:pre-wrap;margin-bottom:12px}
+#opt-result{display:none;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:4px}
+.res-cell{background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:10px;text-align:center}
+.res-val{font-size:16px;font-weight:700;color:var(--green)}
+.res-lbl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+/* logs */
+.log-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.log-controls{display:flex;gap:6px;margin-bottom:10px;align-items:center}
+#log-content{background:#060a13;border:1px solid var(--border);border-radius:8px;padding:10px;height:46vh;overflow:auto;font-size:10px;color:#94a3b8;white-space:pre-wrap;word-break:break-all}
 @media(max-width:768px){
 #sidebar{display:none}
 body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left:0;top:0}
 #menu-toggle{display:flex!important}
+.modal-body{padding:12px}
 }
 #menu-toggle{display:none;position:fixed;top:8px;left:8px;z-index:50;width:36px;height:36px;background:var(--panel);border:1px solid var(--border);border-radius:8px;align-items:center;justify-content:center;cursor:pointer;color:var(--text);backdrop-filter:blur(10px)}
 #onboard-overlay{display:none;position:fixed;bottom:0;left:0;right:0;height:220px;z-index:200;background:rgba(0,0,0,.9);border-top:2px solid var(--accent)}
@@ -67,7 +144,7 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
 <div id="sidebar">
   <div class="header">
     <span class="logo">Linux Desktop</span>
-    <span class="status"></span>
+    <span class="status" id="hdr-status"></span>
   </div>
 
   <div class="section">
@@ -159,51 +236,318 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
     </div>
     <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value" id="sys-uptime">--</span></div>
     <div class="stat-row"><span class="stat-label">Processes</span><span class="stat-value" id="sys-procs">--</span></div>
-    <div class="stat-row"><span class="stat-label">FPS</span><span class="stat-value fps" id="sys-fps">--</span></div>
+    <div class="stat-row"><span class="stat-label">FPS</span><span class="stat-value fps" id="sys-fps">N/A</span></div>
     <div class="stat-row"><span class="stat-label">Idle</span><span class="stat-value" id="sys-idle">--</span></div>
-    <div class="stat-row"><span class="stat-label">Sleep</span><span class="stat-value" id="sys-sleep">--</span></div>
+    <div class="stat-row"><span class="stat-label">Mode</span><span class="stat-value" id="sys-mode">24/7</span></div>
     <div class="stat-row"><span class="stat-label">Time</span><span class="stat-value" id="sys-time">--</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+      Services
+    </div>
+    <div class="svc-row"><span class="svc-name">VNC (Xvnc)</span><span class="svc-chip starting" id="svc-vnc">STARTING</span></div>
+    <div class="svc-row"><span class="svc-name">XFCE Desktop</span><span class="svc-chip starting" id="svc-desktop">STARTING</span></div>
+    <div class="svc-row"><span class="svc-name">WebSocket</span><span class="svc-chip starting" id="svc-websocket">STARTING</span></div>
+    <div class="svc-row"><span class="svc-name">HTTP Server</span><span class="svc-chip starting" id="svc-http">STARTING</span></div>
+    <div class="svc-row"><span class="svc-name">Code Server</span><span class="svc-chip starting" id="svc-code_server">STOPPED</span></div>
   </div>
 
   <div class="tools">
     <button class="tool-btn" id="btn-keyboard" onclick="toggleKeyboard()">
       <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
-      Ban phim
+      Ban phim ao
     </button>
     <div class="tool-row">
-      <button class="tool-btn" onclick="openVSCode()">
+      <button class="tool-btn" id="btn-vscode" onclick="openVSCode(this)">
         <svg viewBox="0 0 24 24"><path d="M17.59 3.59c-.38-.38-.89-.59-1.42-.59H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6.83c0-.53-.21-1.04-.59-1.41l-1.82-1.83zM15 18H9v-2h6v2zm3-6H9V8h9v4z"/></svg>
         VS Code
       </button>
-      <button class="tool-btn" onclick="openTerminal()">
+      <button class="tool-btn" onclick="launchApp('terminal',this)">
         <svg viewBox="0 0 24 24"><path d="M20 19.59V8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c.45 0 .85-.15 1.19-.4l-4.43-4.43c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L20 19.59z"/></svg>
         Terminal
       </button>
     </div>
-    <div class="tool-row" style="margin-top:4px">
-      <button class="tool-btn" onclick="window.open('https://www.google.com/search?q=firefox+esr','_blank')">
+    <div class="tool-row">
+      <button class="tool-btn" onclick="launchApp('firefox',this)">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
         Firefox
       </button>
-      <button class="tool-btn" onclick="window.open('https://www.google.com/search?q=chromium','_blank')">
+      <button class="tool-btn" onclick="launchApp('chromium',this)">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="#0a0e17"/><path d="M12 8a4 4 0 014 4h4A8 8 0 004 12h4a4 4 0 014-4z" fill="#0a0e17"/></svg>
         Chromium
+      </button>
+    </div>
+    <div class="tool-row">
+      <button class="tool-btn" onclick="openModal('modal-guide')">
+        <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+        Huong dan
+      </button>
+      <button class="tool-btn" onclick="openOptimizer()">
+        <svg viewBox="0 0 24 24"><path d="M19.36 2.64l1.42 1.42-7.07 7.07-1.42-1.42 7.07-7.07zm-4.95 9.19l1.42 1.42-2.12 2.12-1.42-1.42 2.12-2.12zM3 17.5l4.5-4.5 3.54 3.54L7.5 21H3v-3.5z"/></svg>
+        Toi uu
+      </button>
+    </div>
+    <div class="tool-row">
+      <button class="tool-btn" onclick="openLogs()">
+        <svg viewBox="0 0 24 24"><path d="M3 3h2v18H3V3zm4 0h2v18H7V3zm4 0h2v18h-2V3zm4 0h2v18h-2V3zm4 0h2v18h-2V3z"/></svg>
+        Logs
+      </button>
+      <button class="tool-btn" id="btn-reconnect-side" onclick="reconnectVNC()">
+        <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+        Reconnect
       </button>
     </div>
   </div>
 </div>
 
 <div id="main">
-  <iframe id="vnc-frame" src="/novnc/vnc.html?autoconnect=true&resize=scale&quality=9&compression=6&reconnect=true&reconnect_delay=2000&path=websockify"></iframe>
+  <iframe id="vnc-frame" src="about:blank"></iframe>
+  <div id="conn-overlay">
+    <div class="conn-card">
+      <div class="spinner"></div>
+      <div id="conn-title">Starting</div>
+      <div id="conn-detail">Dang khoi dong he thong...</div>
+      <button id="btn-reconnect" onclick="reconnectVNC()">Reconnect now</button>
+    </div>
+  </div>
 </div>
+
+<button class="fab" style="left:10px;bottom:10px" onclick="openModal('modal-guide')" aria-label="Huong dan">
+  <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+  <span>Huong dan</span>
+</button>
 
 <div id="onboard-overlay">
   <iframe id="onboard-frame" src="about:blank"></iframe>
 </div>
 
+<!-- ================= GUIDE MODAL ================= -->
+<div class="modal" id="modal-guide">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+      Railway Linux Desktop - Huong dan
+      <button class="modal-close" onclick="closeModal('modal-guide')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="g-nav" id="guide-tabs">
+        <button class="g-tab active" data-page="pg-start">Bat dau</button>
+        <button class="g-tab" data-page="pg-install">Cai ung dung</button>
+        <button class="g-tab" data-page="pg-dev">Developer</button>
+        <button class="g-tab" data-page="pg-storage">Storage</button>
+        <button class="g-tab" data-page="pg-opt">Toi uu hoa</button>
+        <button class="g-tab" data-page="pg-ts">Xu su co</button>
+        <button class="g-tab" data-page="pg-railway">Railway</button>
+      </div>
+
+      <div class="g-page active" id="pg-start">
+        <h3>Su dung Desktop</h3>
+        <p>Desktop XFCE chay trong khung noVNC ben phai. Di chuot, ban phim hoat dong nhu PC that. Thanh dock o duoi chua menu ung dung va cac launcher.</p>
+        <h3>Mo Terminal</h3>
+        <p>Cach 1: nut Terminal o sidebar. Cach 2: menu Applications > Terminal Emulator.</p>
+        <div class="code-block"><code>xfce4-terminal</code><button class="copy-btn">Copy</button></div>
+        <h3>Mo VS Code</h3>
+        <p>Bam nut VS Code o sidebar. Lan dau se mat vai giay de khoi dong code-server, sau do mo tab moi tai dia chi /code/.</p>
+        <h3>Mo Browser</h3>
+        <p>Bam Firefox hoac Chromium o sidebar (ung dung mo ngay tren desktop). Hoac mo tu menu Applications.</p>
+        <h3>Upload file vao Desktop</h3>
+        <p>Dung trinh duyet ben trong desktop de tai file ve thu muc ~/Downloads, hoac dung Google Drive:</p>
+        <div class="code-block"><code>rclone config        # cau hinh lan dau (chay drive-setup)
+drive-pull            # tai file tu Google Drive ve Desktop/Documents/Downloads</code><button class="copy-btn">Copy</button></div>
+        <h3>Download file ra ngoai</h3>
+        <div class="code-block"><code>drive-push            # day Desktop/Documents/Downloads len Google Drive
+backup-data           # tao ban backup .tar.gz trong ~/.backups</code><button class="copy-btn">Copy</button></div>
+        <h3>Luu du lieu</h3>
+        <p>Luu tat ca vao /home/user. Neu gan Railway Volume tai /home thi du lieu ton tai qua cac lan redeploy. Chay backup-data dinh ky de an toan hon.</p>
+      </div>
+
+      <div class="g-page" id="pg-install">
+        <h3>apt install</h3>
+        <div class="code-block"><code>sudo apt update && sudo apt install -y ten-package</code><button class="copy-btn">Copy</button></div>
+        <h3>Cai tu file .deb</h3>
+        <div class="code-block"><code>wget https://example.com/app.deb
+sudo dpkg -i app.deb
+sudo apt-get install -f   # sua dependency neu can</code><button class="copy-btn">Copy</button></div>
+        <h3>AppImage</h3>
+        <div class="code-block"><code>chmod +x app.AppImage
+./app.AppImage</code><button class="copy-btn">Copy</button></div>
+        <h3>Python / pip</h3>
+        <div class="code-block"><code>python3 --version
+pip3 install --user ten-thu-vien</code><button class="copy-btn">Copy</button></div>
+        <h3>Node.js / npm</h3>
+        <div class="code-block"><code>node --version
+npm install -g ten-package</code><button class="copy-btn">Copy</button></div>
+        <h3>Git va CLI tools</h3>
+        <div class="code-block"><code>git --version
+sudo apt install -y htop jq ripgrep</code><button class="copy-btn">Copy</button></div>
+      </div>
+
+      <div class="g-page" id="pg-dev">
+        <h3>Git / GitHub</h3>
+        <div class="code-block"><code>git clone https://github.com/user/repo.git ~/Projects/repo
+cd ~/Projects/repo
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"</code><button class="copy-btn">Copy</button></div>
+        <p>Push len GitHub dung Personal Access Token khi duoc hoi mat khau.</p>
+        <h3>npm / Python chay du an</h3>
+        <div class="code-block"><code>cd ~/Projects/myapp && npm install && npm start
+cd ~/Projects/myapp && pip3 install -r requirements.txt && python3 main.py</code><button class="copy-btn">Copy</button></div>
+        <h3>code-server</h3>
+        <p>VS Code web tai /code/. Mo bang nut VS Code tren sidebar. Thu muc mac dinh la /home/user.</p>
+        <h3>SSH client</h3>
+        <div class="code-block"><code>ssh-keygen -t ed25519
+ssh user@host</code><button class="copy-btn">Copy</button></div>
+        <div class="note">Container chua SSH client. Muon SSH DEN container tu ngoai can them TCP proxy rieng tren Railway (khong bao gom san).</div>
+      </div>
+
+      <div class="g-page" id="pg-storage">
+        <h3>Cau truc thu muc</h3>
+        <div class="code-block"><code>/home/user/Desktop     # desktop icons
+/home/user/Documents   # tai lieu
+/home/user/Downloads   # tai xuong
+/home/user/Projects    # source code dat o day
+/home/user/.backups    # backup tu dong
+/home/user/Drive       # Google Drive mount (neu da setup)</code><button class="copy-btn">Copy</button></div>
+        <h3>Railway Volume</h3>
+        <p>Tren Railway dashboard: Service > Volumes > gan volume tai duong dan /home. Sau khi redeploy, du lieu van con nguyen.</p>
+        <h3>Backup / Restore</h3>
+        <div class="code-block"><code>backup-data     # tao backup vao ~/.backups (tu dong gioi han 5 ban)
+restore-data    # phuc hoi tu ban backup moi nhat</code><button class="copy-btn">Copy</button></div>
+      </div>
+
+      <div class="g-page" id="pg-opt">
+        <h3>Optimize System</h3>
+        <p>Bam nut Toi uu o sidebar. He thong se quet CPU/RAM/disk, don dep apt cache, file temp, cache trinh duyet, thumbnails va toi uu XFCE. Du lieu nguoi dung (Documents, Projects, SSH keys...) KHONG BAO GIO bi xoa.</p>
+        <h3>Giam RAM</h3>
+        <div class="note">Dat bien moi truong: RESOLUTION=1366x768, VNC_DEPTH=16, VNC_FPS=24. Dong ung dung nang (Chromium/GIMP) khi khong dung. Chay Optimize System dinh ky.</div>
+        <h3>Giam CPU</h3>
+        <p>Watchdog tu dong renice tien trinh nang. Tat hieu ung: compositor da tat san. Han che so tab Chromium.</p>
+        <h3>Disk</h3>
+        <div class="code-block"><code>df -h /
+du -sh ~/* | sort -h
+optimize-system --dry-run   # xem truoc se xoa gi</code><button class="copy-btn">Copy</button></div>
+      </div>
+
+      <div class="g-page" id="pg-ts">
+        <h3>Hoi mat khau VNC khi ket noi</h3>
+        <p>Mat khau mac dinh la <b>railwaylinux</b>. noVNC se hoi mot lan moi phien. Doi mat khau bang bien moi truong VNC_PASSWORD tren Railway. Tat xac thuc: dat VNC_PASSWORD=none.</p>
+        <h3>Connecting... / Failed to connect</h3>
+        <p>1. Container moi boot: cho 15-30 giay, trang thai se tu chuyen sang Connected.<br>2. Bam nut Reconnect o sidebar hoac tren man hinh loi.<br>3. Kiem tra /health neu van loi lau hon 2 phut.<br>4. Cuoi cung: Railway > Deployments > Restart.</p>
+        <h3>Desktop den / khong hien</h3>
+        <p>Xem Logs > xfce. Watchdog tu khoi dong lai XFCE trong vong 30 giay. Neu treo lau: bam Reconnect.</p>
+        <h3>Browser khong chay video</h3>
+        <div class="code-block"><code>chromium --no-sandbox https://youtube.com</code><button class="copy-btn">Copy</button></div>
+        <p>Codecs da cai san. Neu Van loi, thu Firefox ESR.</p>
+        <h3>VS Code khong mo</h3>
+        <p>Bam lai nut VS Code (he thong se kiem tra port va khoi dong lai code-server). Xem Logs > code-server neu van loi.</p>
+        <h3>Container restart</h3>
+        <p>Khi Railway restart container, toan bo desktop boot lai tu dau trong ~20-40 giay. Du lieu tren Volume giu nguyen. Backup tu dong chay khi tat.</p>
+      </div>
+
+      <div class="g-page" id="pg-railway">
+        <h3>PORT</h3>
+        <p>Railway tu gan bien PORT. HTTP server luon listen 0.0.0.0:$PORT. Khong can cau hinh gi them.</p>
+        <h3>Volume</h3>
+        <p>Service > Volumes > Mount path: /home. Kich thuoc tuy chon (1GB+).</p>
+        <h3>Variables</h3>
+        <div class="code-block"><code>PORT=8080              # tu dong boi Railway
+RESOLUTION=1600x900
+VNC_DEPTH=24
+VNC_FPS=30
+IDLE_TIMEOUT=0         # 0 = chay 24/7, khong sleep
+ENABLE_PROXY=0         # 1 = bat Tor
+ENABLE_AUDIO=0
+MEM_LIMIT_MB=1228</code><button class="copy-btn">Copy</button></div>
+        <h3>Domain</h3>
+        <p>Settings > Networking > Generate Domain. Web desktop chay ngay tai domain do.</p>
+        <h3>Logs / Restart / Redeploy</h3>
+        <p>Tab Deployments xem log boot ([BOOT], [VNC], [XFCE] tags). Nut Restart de khoi dong lai container. Redeploy khi cap nhat repo.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= OPTIMIZER MODAL ================= -->
+<div class="modal" id="modal-optimizer">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M19.36 2.64l1.42 1.42-7.07 7.07-1.42-1.42 7.07-7.07z"/><path d="M3 17.5l4.5-4.5 3.54 3.54L7.5 21H3v-3.5z"/></svg>
+      System Optimizer
+      <button class="modal-close" onclick="closeModal('modal-optimizer');optStopStream()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="warnbox opt-warning" id="opt-warn">
+        Canh bao: tien trinh se don dep apt cache, file tam thoi, log cu, cache trinh duyet va thumbnails.
+        Du lieu nguoi dung (Desktop, Documents, Downloads, Projects, SSH keys, cau hinh) KHONG BI ANH HUONG.
+        Khuyen khich dong cac ung dung nang truoc khi chay. Qua trinh mat khoang 10-60 giay.
+      </div>
+      <div class="opt-controls">
+        <label class="chk"><input type="checkbox" id="opt-dryrun"> Dry run (chi xem truoc)</label>
+        <button class="btn" id="opt-run" onclick="optRun()">Chay toi uu hoa</button>
+        <span id="opt-status-txt" style="font-size:11px;color:var(--dim)">San sang</span>
+      </div>
+      <ul id="opt-steps">
+        <li data-step="1">Checking CPU</li>
+        <li data-step="2">Checking RAM</li>
+        <li data-step="3">Checking disk</li>
+        <li data-step="4">Cleaning package cache</li>
+        <li data-step="5">Cleaning temporary files</li>
+        <li data-step="6">Optimizing XFCE</li>
+        <li data-step="7">Optimizing browser</li>
+        <li data-step="8">Checking services</li>
+        <li data-step="9">Applying Railway optimizations</li>
+      </ul>
+      <div id="opt-log"></div>
+      <div id="opt-result">
+        <div class="res-cell"><div class="res-val" id="res-ram">-</div><div class="res-lbl">RAM saved</div></div>
+        <div class="res-cell"><div class="res-val" id="res-disk">-</div><div class="res-lbl">Disk cleaned</div></div>
+        <div class="res-cell"><div class="res-val" id="res-svc">-</div><div class="res-lbl">Services optimized</div></div>
+        <div class="res-cell"><div class="res-val" id="res-time">-</div><div class="res-lbl">Time</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= LOGS MODAL ================= -->
+<div class="modal" id="modal-logs">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M3 3h2v18H3V3zm4 0h2v18H7V3zm4 0h2v18h-2V3zm4 0h2v18h-2V3z"/></svg>
+      System Logs
+      <button class="modal-close" onclick="closeModal('modal-logs');logAutoOff()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="log-tabs" id="log-tabs">
+        <button class="g-tab active" data-log="system">system</button>
+        <button class="g-tab" data-log="boot">boot</button>
+        <button class="g-tab" data-log="vnc">vnc</button>
+        <button class="g-tab" data-log="xfce">xfce</button>
+        <button class="g-tab" data-log="websocket">websocket</button>
+        <button class="g-tab" data-log="watchdog">watchdog</button>
+        <button class="g-tab" data-log="optimizer">optimizer</button>
+        <button class="g-tab" data-log="code-server">code-server</button>
+        <button class="g-tab" data-log="backup">backup</button>
+      </div>
+      <div class="log-controls">
+        <button class="btn secondary" onclick="loadLogs()">Refresh</button>
+        <button class="btn secondary" onclick="clearLog()">Clear</button>
+        <label class="chk"><input type="checkbox" id="log-auto"> Auto refresh</label>
+        <span id="log-status-txt" style="font-size:11px;color:var(--dim)"></span>
+      </div>
+      <div id="log-content">(trong)</div>
+    </div>
+  </div>
+</div>
+
 <script>
+'use strict';
 var CIRC=188.5;
-function fmt(b){for(var u of['B','KB','MB','GB','TB']){if(b<1024)return b.toFixed(1)+' '+u;b/=1024}return b.toFixed(1)+' PB'}
+
+function fmt(b){if(b==null)return'--';for(var u of['B','KB','MB','GB','TB']){if(b<1024)return b.toFixed(1)+' '+u;b/=1024}return b.toFixed(1)+' PB'}
+function $(id){return document.getElementById(id)}
+
 function setGauge(id,pct,color){
   var el=document.querySelector('#'+id+' .gauge-fill');
   var txt=document.querySelector('#'+id+' .gauge-pct');
@@ -214,56 +558,378 @@ function setGauge(id,pct,color){
   txt.textContent=Math.round(pct)+'%';
   txt.style.color=c;
 }
+
+/* ================= STATS ================= */
+var lastUptime={sec:null,at:0};
+function fmtUp(s){
+  var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=Math.floor(s%60);
+  return(d>0?d+'d ':'')+h+'h '+m+'m '+x+'s';
+}
 function upd(){
   fetch('/api/stats').then(function(r){return r.json()}).then(function(d){
     setGauge('g-cpu',d.cpu_percent,'#22c55e');
     setGauge('g-mem',d.mem_percent,'#3b82f6');
     setGauge('g-disk',d.disk_percent,'#a855f7');
-    document.getElementById('cpu-count').textContent=d.cpu_count;
-    document.getElementById('cpu-freq').textContent=d.cpu_freq+' MHz';
-    document.getElementById('cpu-load').textContent=d.load_1+' / '+d.load_5+' / '+d.load_15;
-    document.getElementById('mem-used').textContent=fmt(d.mem_used);
-    document.getElementById('mem-total').textContent=fmt(d.mem_total);
-    document.getElementById('mem-limit').textContent=d.mem_limit_mb?d.mem_limit_mb+' MB':'--';
-    document.getElementById('swap-info').textContent=fmt(d.swap_used)+' / '+fmt(d.swap_total);
-    document.getElementById('disk-used').textContent=fmt(d.disk_used);
-    document.getElementById('disk-total').textContent=fmt(d.disk_total);
-    var ws=document.getElementById('wifi-status');
+    $('cpu-count').textContent=d.cpu_count;
+    $('cpu-freq').textContent=d.cpu_freq+' MHz';
+    $('cpu-load').textContent=d.load_1+' / '+d.load_5+' / '+d.load_15;
+    $('mem-used').textContent=fmt(d.mem_used);
+    $('mem-total').textContent=fmt(d.mem_total);
+    $('mem-limit').textContent=d.mem_limit_mb?d.mem_limit_mb+' MB':'--';
+    $('swap-info').textContent=fmt(d.swap_used)+' / '+fmt(d.swap_total);
+    $('disk-used').textContent=fmt(d.disk_used);
+    $('disk-total').textContent=fmt(d.disk_total);
+    var ws=$('wifi-status');
     if(d.wifi){ws.innerHTML='<span class="wifi-badge">'+d.wifi+'</span>'}else{ws.textContent='Ethernet'}
-    document.getElementById('net-sent').textContent=fmt(d.net_sent);
-    document.getElementById('net-recv').textContent=fmt(d.net_recv);
-    document.getElementById('sys-uptime').textContent=d.uptime;
-    document.getElementById('sys-procs').textContent=d.processes;
-    document.getElementById('sys-fps').textContent=d.fps+' FPS';
-    var idleS=Math.round(d.idle_ms/1000);
-    document.getElementById('sys-idle').textContent=Math.floor(idleS/60)+'m '+idleS%60+'s';
-    var sl=document.getElementById('sys-sleep');
-    if(d.suspended){sl.textContent='SLEEPING';sl.className='stat-value danger'}
-    else{sl.textContent='ACTIVE';sl.className='stat-value ok'}
-    document.getElementById('sys-time').textContent=new Date().toLocaleTimeString();
+    $('net-sent').textContent=fmt(d.net_sent);
+    $('net-recv').textContent=fmt(d.net_recv);
+    if(typeof d.uptime_seconds==='number'){lastUptime.sec=d.uptime_seconds;lastUptime.at=Date.now()}
+    $('sys-uptime').textContent=fmtUp(d.uptime_seconds!=null?d.uptime_seconds:d.uptime||0);
+    $('sys-procs').textContent=d.processes;
+    /* FPS: backend does NOT fabricate FPS; show real value only, else N/A */
+    $('sys-fps').textContent=(typeof d.fps==='number'&&d.fps>0)?(d.fps+' FPS'):'N/A';
+    var idleS=Math.round((d.idle_ms||0)/1000);
+    $('sys-idle').textContent=Math.floor(idleS/60)+'m '+idleS%60+'s';
+    $('sys-mode').textContent=d.idle_suspend_enabled?('SLEEP-OK ('+(d.suspended?'SLEEPING':'ACTIVE')+')'):'24/7';
+    $('sys-mode').className='stat-value'+(!d.idle_suspend_enabled?' ok':(d.suspended?' warn':' ok'));
+    $('sys-time').textContent=new Date().toLocaleTimeString();
   }).catch(function(){});
 }
 upd();setInterval(upd,2000);
+setInterval(function(){
+  if(lastUptime.sec!=null){
+    $('sys-uptime').textContent=fmtUp(lastUptime.sec+Math.round((Date.now()-lastUptime.at)/1000));
+  }
+},1000);
+
+/* ================= CONNECTION STATE MACHINE =================
+   States: starting | waiting_vnc | connecting | connected |
+           reconnecting | failed
+   Sources of truth: /health polling + live noVNC status element
+   (same-origin iframe, element #noVNC_status).                    */
+var connState='starting';
+var healthData=null;
+var lastNoVnc='';
+var failDetail='';
+
+function getNoVncText(){
+  try{
+    var d=$('vnc-frame').contentDocument;
+    var el=d&&d.getElementById('noVNC_status');
+    return el?el.textContent:'';
+  }catch(e){return''}
+}
+
+function setConn(state,detail,isErr){
+  if(connState===state&&!isErr&&state!=='failed')return;
+  connState=state;
+  var ov=$('conn-overlay'),t=$('conn-title'),dt=$('conn-detail');
+  var map={
+    starting:['Starting','Dang khoi dong he thong...'],
+    waiting_vnc:['Waiting for VNC','Cho Xvnc san sang (port 5901)...'],
+    connecting:['Connecting','Dang ket noi noVNC...'],
+    reconnecting:['Connection lost','Mat ket noi - dang tu dong ket noi lai...'],
+    failed:['Failed','']
+  };
+  if(state==='connected'){ov.classList.add('hidden');return}
+  ov.classList.remove('hidden');
+  var m=map[state]||map.starting;
+  t.textContent=m[0];
+  dt.textContent=detail||(m[1]||'');
+  dt.className=isErr?'err':'';
+  if(state==='failed'||state==='reconnecting'){ov.classList.add('show-reconnect')}
+  else{ov.classList.remove('show-reconnect')}
+  var hs=$('hdr-status');
+  hs.className='status '+(state==='connected'?'ok':(state==='failed'?'bad':''));
+}
+
+function evalConn(){
+  var nv=getNoVncText();
+  if(nv!==lastNoVnc){lastNoVnc=nv}
+  var h=healthData;
+  if(nv.indexOf('Connected')===0){setConn('connected');return}
+  if(h){
+    var v=h.vnc;
+    if(h.status==='unhealthy'||v==='failed'){
+      setConn('failed','Khong the ket noi VNC. Watchdog dang khoi dong lai. Neu lau hon 2 phut hay Restart container tren Railway.',true);
+      return;
+    }
+    if(nv.indexOf('Connecting')===0){setConn('connecting');return}
+    if(v!=='ready'){
+      setConn('waiting_vnc');return;
+    }
+    if(nv.indexOf('Disconnect')===0||nv.indexOf('Failed')>=0){
+      setConn('reconnecting');return;
+    }
+    if(nv===''){setConn('connecting');return}
+    setConn('connecting');
+    return;
+  }
+  setConn('starting');
+}
+
+function pollHealth(){
+  fetch('/health').then(function(r){return r.json().then(function(j){j.__code=r.status;return j})}).then(function(h){
+    healthData=h;
+    renderServices(h);
+    evalConn();
+  }).catch(function(){
+    /* HTTP server itself unreachable */
+    setConn('failed','Khong truy cap duoc HTTP server. Dang cho tu phuc hoi...',true);
+    setTimeout(function(){location.reload()},8000);
+  });
+}
+
+function renderServices(h){
+  if(!h||!h.components)return;
+  var cls={'ready':'ready','starting':'starting','waiting':'starting',
+           'stopped':'starting','failed':'failed','suspended':'warning'};
+  var lbl={'ready':'READY','starting':'STARTING','waiting':'STARTING',
+           'stopped':'STOPPED','failed':'FAILED','suspended':'WARNING'};
+  [['http','svc-http'],['vnc','svc-vnc'],['desktop','svc-desktop'],
+   ['websocket','svc-websocket'],['code_server','svc-code_server']].forEach(function(p){
+    var c=h.components[p[0]];
+    var st=c?c.state:'unknown';
+    var el=$(p[1]);
+    el.textContent=lbl[st]||st.toUpperCase();
+    el.className='svc-chip '+(cls[st]||'starting');
+  });
+}
+pollHealth();setInterval(pollHealth,3000);
+
+function reconnectVNC(){
+  var f=$('vnc-frame');
+  if(f.src==='about:blank'){loadVNCFrame();return}
+  var base=f.src.split('&_r=')[0];
+  setConn('reconnecting');
+  f.src=base+'&_r='+Date.now();
+}
+
+/* ================= VNC IFRAME BOOTSTRAP =================
+   Build the noVNC URL after fetching session info. The default
+   password is auto-filled for seamless login; custom passwords
+   are NEVER sent to the browser (noVNC prompts instead).      */
+var vncBase='/novnc/vnc.html?autoconnect=true&resize=scale&quality=9&compression=6&reconnect=true&reconnect_delay=2000&path=websockify';
+function loadVNCFrame(){
+  fetch('/api/session').then(function(r){return r.json()}).then(function(s){
+    var url=vncBase;
+    if(s&&s.password){url+='&password='+encodeURIComponent(s.password)}
+    $('vnc-frame').src=url;
+  }).catch(function(){
+    $('vnc-frame').src=vncBase;
+  });
+}
+loadVNCFrame();
+
+/* ================= APP LAUNCHERS ================= */
+function launchApp(name,btn){
+  if(btn){btn.classList.add('active');setTimeout(function(){btn.classList.remove('active')},1200)}
+  fetch('/api/apps/'+name,{method:'POST'}).catch(function(){});
+}
+
+async function openVSCode(btn){
+  var old=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='Dang khoi dong...';
+  try{
+    var r=await fetch('/api/start/code-server',{method:'POST'});
+    var j=await r.json();
+    if(j.status==='ready'||j.status==='starting'){
+      /* wait until component reports ready before opening (max ~35s) */
+      var tries=0;
+      while(tries++<23){
+        await new Promise(function(res){setTimeout(res,1500)});
+        try{
+          var h=await(await fetch('/health')).json();
+          if(h.components&&h.components.code_server.state==='ready')break;
+        }catch(e){}
+      }
+      window.open('/code/','_blank');
+    }else{
+      alert('Khong khoi dong duoc code-server ('+(j.msg||j.status)+'). Xem Logs > code-server.');
+    }
+  }catch(e){alert('Loi ket noi khi khoi dong VS Code')}
+  btn.disabled=false;
+  btn.innerHTML=old;
+}
+
+/* keyboard overlay */
 var kbVisible=false;
 function toggleKeyboard(){
   kbVisible=!kbVisible;
-  var o=document.getElementById('onboard-overlay');
-  var f=document.getElementById('onboard-frame');
-  var b=document.getElementById('btn-keyboard');
+  var o=$('onboard-overlay'),f=$('onboard-frame'),b=$('btn-keyboard');
   if(kbVisible){o.classList.add('show');b.classList.add('active');f.src='/novnc/onboard.html'}
   else{o.classList.remove('show');b.classList.remove('active');f.src='about:blank'}
 }
-async function openVSCode(){
-  var b=event.currentTarget;
-  var old=b.innerHTML;
-  b.innerHTML='Dang mo VS Code...';
-  try{await fetch('/api/start/code-server',{method:'POST'})}catch(e){}
-  setTimeout(function(){
-    b.innerHTML=old;
-    window.open('/code/','_blank');
-  },3000);
+
+/* ================= MODALS / GUIDE ================= */
+function openModal(id){$(id).classList.add('open')}
+function closeModal(id){$(id).classList.remove('open')}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    ['modal-guide','modal-optimizer','modal-logs'].forEach(function(m){closeModal(m)});
+    optStopStream();logAutoOff();
+  }
+});
+document.querySelectorAll('.modal').forEach(function(m){
+  m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open')});
+});
+
+document.querySelectorAll('#guide-tabs .g-tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('#guide-tabs .g-tab').forEach(function(x){x.classList.remove('active')});
+    document.querySelectorAll('.g-page').forEach(function(x){x.classList.remove('active')});
+    t.classList.add('active');
+    $(t.dataset.page).classList.add('active');
+  });
+});
+
+/* copy buttons (event delegation) */
+document.addEventListener('click',function(e){
+  if(e.target.classList&&e.target.classList.contains('copy-btn')){
+    var code=e.target.parentElement.querySelector('code').textContent.trim();
+    var done=function(){e.target.textContent='Copied';setTimeout(function(){e.target.textContent='Copy'},1200)};
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(done).catch(function(){fallbackCopy(code);done()});
+    }else{fallbackCopy(code);done()}
+  }
+});
+function fallbackCopy(txt){
+  var ta=document.createElement('textarea');
+  ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy')}catch(e){}
+  document.body.removeChild(ta);
 }
-function openTerminal(){var f=document.getElementById('vnc-frame');f.contentWindow.postMessage({type:'xfce-terminal'},'*')}
+
+/* ================= OPTIMIZER ================= */
+var optSource=null;
+function openOptimizer(){openModal('modal-optimizer');optRefreshStatus()}
+function closeModalAndOpt(){closeModal('modal-optimizer');optStopStream()}
+
+function markStep(n,state){
+  var li=document.querySelector('#opt-steps li[data-step="'+n+'"]');
+  if(li)li.className=state;
+}
+function resetSteps(){
+  document.querySelectorAll('#opt-steps li').forEach(function(li){li.className=''});
+  $('opt-log').style.display='none';$('opt-log').textContent='';
+  $('opt-result').style.display='none';
+}
+
+function optRefreshStatus(){
+  fetch('/api/optimize/status').then(function(r){return r.json()}).then(function(j){
+    if(j.running){$('opt-run').disabled=true;$('opt-status-txt').textContent='Dang chay...'}
+    else{$('opt-run').disabled=false;$('opt-status-txt').textContent=j.result?'Hoan thanh':'San sang'}
+  }).catch(function(){});
+}
+
+async function optRun(){
+  var dry=$('opt-dryrun').checked;
+  resetSteps();
+  $('opt-run').disabled=true;
+  $('opt-warn').innerHTML='Dang chay'+(dry?' (DRY RUN - khong thay doi gi)':'')+
+    '. Vui long cho... Ban co the theo doi tung buoc ben duoi.';
+  $('opt-log').style.display='block';
+  optStartStream();
+  try{
+    var r=await fetch('/api/optimize/run?dry_run='+(dry?'1':'0'),{method:'POST'});
+    var j=await r.json();
+    if(r.status!==200){$('opt-status-txt').textContent=j.status||'loi'}
+  }catch(e){$('opt-status-txt').textContent='Loi ket noi'}
+}
+
+function optStartStream(){
+  optStopStream();
+  optSource=new EventSource('/api/optimize/stream');
+  optSource.onmessage=function(ev){
+    if(ev.data==='__END__'){optStopStream();return}
+    var entry;
+    try{entry=JSON.parse(ev.data)}catch(e){return}
+    var line=entry.line||'';
+    var logEl=$('opt-log');
+    logEl.textContent+=line+'\n';
+    logEl.scrollTop=logEl.scrollHeight;
+    var m=line.match(/\[(\d)\/9\]/);
+    if(m){
+      var n=parseInt(m[1]);
+      document.querySelectorAll('#opt-steps li').forEach(function(li){
+        var s=parseInt(li.dataset.step);
+        if(s<n)li.className='done';else if(s===n)li.className='active';
+      });
+      if(line.toLowerCase().indexOf('ok:')>=0||line.indexOf('OK:')>=0)markStep(n,'done');
+    }else{
+      /* step completion lines like "OK: ..." belong to previous active step */
+      var act=document.querySelector('#opt-steps li.active');
+      if(act&&(line.indexOf('OK:')>=0||line.indexOf('[DRY-RUN] would')>=0))act.className='done';
+    }
+    if(line.indexOf('completed dry_run=')>=0){
+      document.querySelectorAll('#opt-steps li').forEach(function(li){li.className='done'});
+    }
+    if(line.indexOf('OPT_RESULT_JSON:')===0){
+      try{
+        var res=JSON.parse(line.substring('OPT_RESULT_JSON:'.length));
+        showOptResult(res);
+      }catch(e){}
+    }
+  };
+  optSource.onerror=function(){/* stream ends naturally */};
+}
+function optStopStream(){if(optSource){optSource.close();optSource=null}}
+
+function showOptResult(res){
+  optStopStream();
+  $('opt-run').disabled=false;
+  $('opt-status-txt').textContent=res.dry_run?'Dry run hoan thanh':'Hoan thanh';
+  $('res-ram').textContent=res.ram_saved_mb+' MB';
+  $('res-disk').textContent=res.disk_cleaned_mb+' MB';
+  $('res-svc').textContent=(res.services_ok||0)+'/'+(res.services_total||0);
+  $('res-time').textContent=res.duration_s+'s';
+  $('opt-result').style.display='grid';
+  $('opt-warn').innerHTML=res.dry_run
+    ?'Dry run hoan thanh. Khong co gi bi thay doi. Bo tick Dry run va chay lai de ap dung.'
+    :'Toi uu hoa hoan thanh. Du lieu nguoi du lieu khong bi anh huong.';
+}
+
+/* ================= LOGS VIEWER ================= */
+var curLog='system',logTimer=null;
+function openLogs(){
+  openModal('modal-logs');
+  loadLogs();
+  logAutoSetup();
+}
+function logAutoSetup(){
+  logAutoOff();
+  var chk=$('log-auto');
+  var fn=function(){if(chk.checked)logTimer=setInterval(loadLogs,3000);else logAutoOff()};
+  if(!chk._bound){chk.addEventListener('change',fn);chk._bound=true}
+  if(chk.checked)logTimer=setInterval(loadLogs,3000);
+}
+function logAutoOff(){if(logTimer){clearInterval(logTimer);logTimer=null}}
+
+document.querySelectorAll('#log-tabs .g-tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('#log-tabs .g-tab').forEach(function(x){x.classList.remove('active')});
+    t.classList.add('active');
+    curLog=t.dataset.log;
+    loadLogs();
+  });
+});
+
+function loadLogs(){
+  $('log-status-txt').textContent='Loading...';
+  fetch('/api/logs/view/'+curLog+'?lines=300')
+    .then(function(r){return r.json()})
+    .then(function(j){
+      $('log-content').textContent=j.content||'(trong)';
+      $('log-content').scrollTop=$('log-content').scrollHeight;
+      $('log-status-txt').textContent=curLog;
+    })
+    .catch(function(){$('log-status-txt').textContent='loi tai log'});
+}
+function clearLog(){
+  fetch('/api/logs/clear/'+curLog,{method:'POST'}).then(loadLogs).catch(function(){});
+}
 </script>
 </body>
 </html>

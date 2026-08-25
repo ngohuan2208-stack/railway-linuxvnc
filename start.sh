@@ -1,51 +1,102 @@
 #!/bin/bash
+# ============================================================
+# Railway Linux Desktop - container entrypoint
+# Boot flow:
+#   env validation -> filesystem init -> dbus -> supervisord
+#   -> wait 5901 -> [VNC] Ready -> XFCE ready -> SYSTEM READY
+# The HTTP server starts immediately (Railway healthcheck),
+# but /health reports honest component states during boot.
+# ============================================================
 set -e
 
+# ---------------- defaults & validation ----------------
 PORT=${PORT:-8080}
-VNC_PASSWORD=${VNC_PASSWORD:-linuxdesktop}
 RESOLUTION=${RESOLUTION:-1600x900}
 VNC_DEPTH=${VNC_DEPTH:-24}
+VNC_FPS=${VNC_FPS:-30}
 TZ=${TZ:-}
 AUTO_BACKUP=${AUTO_BACKUP:-1}
 BACKUP_INTERVAL_MIN=${BACKUP_INTERVAL_MIN:-30}
 AUTO_BACKUP_ON_EXIT=${AUTO_BACKUP_ON_EXIT:-1}
-IDLE_TIMEOUT=${IDLE_TIMEOUT:-300}
+IDLE_TIMEOUT=${IDLE_TIMEOUT:-0}          # 24/7: suspend disabled by default
 IDLE_CHECK=${IDLE_CHECK:-10}
 DROP_CACHE=${DROP_CACHE:-1}
 ENABLE_PROXY=${ENABLE_PROXY:-0}
 ENABLE_AUDIO=${ENABLE_AUDIO:-0}
-VNC_FPS=${VNC_FPS:-30}
 MEM_LIMIT_MB=${MEM_LIMIT_MB:-1228}
 CPU_MAX_PCT=${CPU_MAX_PCT:-85}
 DISK_CLEAN_PCT=${DISK_CLEAN_PCT:-80}
 WATCHDOG_INTERVAL=${WATCHDOG_INTERVAL:-5}
+BOOT_GRACE_SEC=${BOOT_GRACE_SEC:-240}
 
-export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ
-export IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
+case "$PORT" in ''|*[!0-9]*) PORT=8080 ;; esac
+[ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ] && PORT=8080
+case "$RESOLUTION" in ''|*[!0-9x]*|*x*x*) RESOLUTION=1600x900 ;; esac
+case "$VNC_DEPTH" in 16|24) ;; *) VNC_DEPTH=24 ;; esac
+case "$VNC_FPS" in ''|*[!0-9]*) VNC_FPS=30 ;; esac
+[ "$VNC_FPS" -lt 1 ] && VNC_FPS=30; [ "$VNC_FPS" -gt 60 ] && VNC_FPS=60
+case "$IDLE_TIMEOUT" in ''|*[!0-9]*) IDLE_TIMEOUT=0 ;; esac
+case "$MEM_LIMIT_MB" in ''|*[!0-9]*) MEM_LIMIT_MB=1228 ;; esac
+
+export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
 export AUTO_BACKUP BACKUP_INTERVAL_MIN AUTO_BACKUP_ON_EXIT ENABLE_PROXY ENABLE_AUDIO
-export MEM_LIMIT_MB CPU_MAX_PCT DISK_CLEAN_PCT WATCHDOG_INTERVAL
+export MEM_LIMIT_MB CPU_MAX_PCT DISK_CLEAN_PCT WATCHDOG_INTERVAL BOOT_GRACE_SEC
 
-echo "=== Linux Desktop (XFCE + noVNC + VS Code) ==="
-echo "PORT=$PORT RES=$RESOLUTION DEPTH=$VNC_DEPTH"
+mkdir -p /var/log/supervisor /var/log
+touch /var/log/boot.log
 
-# --- TIMEZONE ---
+blog() {
+    echo "$@"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /var/log/boot.log
+}
+
+blog "[BOOT] Railway Linux Desktop starting"
+
+# ---------------- TIMEZONE ----------------
 if [ -n "$TZ" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
     ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
     echo "$TZ" > /etc/timezone
 fi
 
-# --- USER SETUP ---
+# ---------------- USER SETUP ----------------
 if ! id user >/dev/null 2>&1; then
     useradd -m -d /home/user -s /bin/bash user
     echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user
     chmod 0440 /etc/sudoers.d/user
 fi
+# Volume-mounted /home may hide the image home dir - recreate skeleton.
+if [ ! -d /home/user ]; then
+    mkdir -p /home/user
+    cp -a /etc/skel/. /home/user/ 2>/dev/null || true
+fi
 
-mkdir -p /home/user/{Desktop,Documents,Downloads,.config,.cache,.vnc,.backups,Drive,.local/share/code-server,.wallpapers}
+mkdir -p /home/user/{Desktop,Documents,Downloads,Projects,.config,.cache,.vnc,.backups,Drive,.local/share/code-server,.wallpapers,.ssh}
+chmod 700 /home/user/.ssh 2>/dev/null || true
 
-# --- VNC ---
-echo "$VNC_PASSWORD" | vncpasswd -f > /home/user/.vnc/passwd
-chmod 600 /home/user/.vnc/passwd
+blog "[BOOT] Environment OK"
+blog "[BOOT] Storage OK (/home/user initialized)"
+
+# ---------------- VNC AUTH ----------------
+# Default password: railwaylinux (change via VNC_PASSWORD env).
+# Set VNC_PASSWORD=none|0|off to disable auth entirely (localhost-only).
+VNC_PASSWORD=${VNC_PASSWORD:-railwaylinux}
+case "$(echo "$VNC_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
+    none|0|off) VNC_PASSWORD="" ;;
+esac
+rm -f /home/user/.vnc/passwd
+if [ -n "$VNC_PASSWORD" ]; then
+    printf '%s' "$VNC_PASSWORD" | vncpasswd -f > /home/user/.vnc/passwd
+    chmod 600 /home/user/.vnc/passwd
+    blog "[VNC] auth = VncAuth (default railwaylinux, override via VNC_PASSWORD)"
+else
+    blog "[VNC] auth = None (disabled via VNC_PASSWORD, localhost-only bridge)"
+fi
+# Marker for http-server: expose the password to noVNC ONLY when it is the
+# public default (admin has not customized VNC_PASSWORD).
+if [ "$VNC_PASSWORD" = "railwaylinux" ]; then
+    VNC_PASSWORD_DEFAULTED=1
+fi
+export VNC_PASSWORD VNC_PASSWORD_DEFAULTED
 
 cat > /home/user/.vnc/xstartup << 'XSTARTUP'
 #!/bin/sh
@@ -56,7 +107,32 @@ exec dbus-launch --exit-with-session startxfce4
 XSTARTUP
 chmod +x /home/user/.vnc/xstartup
 
-# --- XFCE PERFORMANCE ---
+# ---------------- XVNC RUNNER ----------------
+# Generated at boot so security flags depend on VNC_PASSWORD presence.
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1   # stale locks from previous run
+cat > /usr/local/bin/run-xvnc.sh << RUNXVNC
+#!/bin/sh
+SECARGS="-SecurityTypes None"
+if [ -s /home/user/.vnc/passwd ]; then
+    SECARGS="-SecurityTypes VncAuth -PasswordFile /home/user/.vnc/passwd"
+fi
+# NOTE: only TigerVNC-supported options here. Debian bookworm Xvnc has NO
+# -QualityLevel/-CompressionLevel/-MaxCutPending (they crash startup).
+exec Xvnc :1 \\
+    -geometry ${RESOLUTION} -depth ${VNC_DEPTH} \\
+    -rfbport 5901 -localhost yes \\
+    \$SECARGS \\
+    -AlwaysShared \\
+    -FrameRate ${VNC_FPS} -CompareFB 2 -ZlibLevel 6 \\
+    -BlacklistThreshold=0 -UseBlacklist=0 \\
+    -Log "*:stderr:30"
+RUNXVNC
+chmod +x /usr/local/bin/run-xvnc.sh
+chown -R user:user /home/user/.vnc
+
+# ---------------- XFCE PERFORMANCE ----------------
 mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM4'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -73,18 +149,33 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM4'
 </channel>
 XFWM4
 
-# --- POWER MANAGER ---
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml << 'XFPM'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-power-manager" version="1.0">
   <property name="xfce4-power-manager" type="empty">
     <property name="show-tray-icon" type="bool" value="false"/>
     <property name="presentation-mode" type="bool" value="true"/>
+    <property name="inactivity-on-ac" type="uint" value="0"/>
+    <property name="dpms-enabled" type="bool" value="false"/>
+    <property name="lock-screen-suspend-hibernate" type="bool" value="false"/>
   </property>
 </channel>
 XFPM
 
-# --- DOCK PANEL (transparent, bottom) ---
+# Disable screen blanking inside the X session (24/7 visibility)
+cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml << 'XSS'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+XSS
+
+# ---------------- DOCK PANEL ----------------
 mkdir -p /home/user/.config/xfce4/panel
 cat > /home/user/.config/xfce4/panel/whiskermenu-1.rc << 'WHISKER'
 [button]
@@ -92,8 +183,6 @@ style=3
 custom-name=Applications
 WHISKER
 
-# Dock panel config
-mkdir -p /home/user/.config/xfce4/panel
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml << 'PANEL'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-panel" version="1.0">
@@ -155,7 +244,7 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml << 'PA
 </channel>
 PANEL
 
-# --- GTK THEME (dark) ---
+# ---------------- GTK THEME (dark) ----------------
 mkdir -p /home/user/.config/gtk-3.0
 cat > /home/user/.config/gtk-3.0/settings.ini << 'GTK3'
 [Settings]
@@ -175,15 +264,16 @@ gtk-icon-theme-name="Papirus-Dark"
 gtk-font-name="DejaVu Sans 10"
 GTK2
 
-# --- WALLPAPER (pre-built in image, instant boot) ---
+# ---------------- WALLPAPER ----------------
 mkdir -p /home/user/.wallpapers
-if [ -f /opt/wallpaper.png ]; then
-    cp -f /opt/wallpaper.png /home/user/.wallpapers/default.png 2>/dev/null || true
-else
-    python3 /usr/local/bin/wallpaper-gen.py /home/user/.wallpapers/default.png 1600 900 2>/dev/null || true
+if [ ! -f /home/user/.wallpapers/default.png ]; then
+    if [ -f /opt/wallpaper.png ]; then
+        cp -f /opt/wallpaper.png /home/user/.wallpapers/default.png 2>/dev/null || true
+    else
+        python3 /usr/local/bin/wallpaper-gen.py /home/user/.wallpapers/default.png 1600 900 2>/dev/null || true
+    fi
 fi
 
-mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << 'WALLPAPER'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-desktop" version="1.0">
@@ -203,7 +293,7 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << '
 </channel>
 WALLPAPER
 
-# --- ONBOARD ---
+# ---------------- ONBOARD ----------------
 mkdir -p /home/user/.config/onboard
 cat > /home/user/.config/onboard/onboard.conf << 'ONBOARD'
 [com Canonical Onboard]
@@ -216,22 +306,23 @@ enable-repositioning = true
 show-on-force-touchscreen = false
 ONBOARD
 
-# --- PULSEAUDIO (loa: null sink, app không crash khi phát âm thanh) ---
+# ---------------- PULSEAUDIO (only when ENABLE_AUDIO=1) ----------------
 mkdir -p /home/user/.config/pulse
 cat > /home/user/.config/pulse/default.pa << 'PULSE'
 .include /etc/pulse/default.pa
 PULSE
 
-# --- CODE-SERVER ---
+# ---------------- CODE-SERVER (lazy started via UI) ----------------
 mkdir -p /home/user/.config/code-server
 cat > /home/user/.config/code-server/config.yaml << 'CODESERVER'
-bind-addr: 0.0.0.0:8443
+bind-addr: 127.0.0.1:8443
 auth: none
 cert: false
 CODESERVER
 
-# --- CHROMIUM (YouTube fix) ---
+# ---------------- CHROMIUM ----------------
 mkdir -p /home/user/.config/chromium/Default
+if [ ! -f /home/user/.config/chromium/Default/Preferences ]; then
 cat > /home/user/.config/chromium/Default/Preferences << 'CHROMIUM'
 {
   "hardware_acceleration_mode": {"enabled": false},
@@ -239,9 +330,11 @@ cat > /home/user/.config/chromium/Default/Preferences << 'CHROMIUM'
   "profile": {"default_content_setting_values": {"notifications": 2}}
 }
 CHROMIUM
+fi
 
-# --- FIREFOX (YouTube fix) ---
+# ---------------- FIREFOX ----------------
 mkdir -p /home/user/.mozilla/firefox/default-release
+if [ ! -f /home/user/.mozilla/firefox/default-release/user.js ]; then
 cat > /home/user/.mozilla/firefox/default-release/user.js << 'FIREFOX'
 user_pref("media.hardware-video-decoding.force-enabled", false);
 user_pref("gfx.webrender.all", true);
@@ -249,8 +342,9 @@ user_pref("media.ffmpeg.vaapi.enabled", false);
 user_pref("browser.shell.checkDefaultBrowser", false);
 user_pref("browser.startup.homepage_override.mstone", "ignore");
 FIREFOX
+fi
 
-# --- TOR PROXY ---
+# ---------------- TOR PROXY (optional) ----------------
 if [ "$ENABLE_PROXY" = "1" ]; then
     mkdir -p /home/user/.config/tor
     cat > /home/user/.config/tor/torrc << 'TOR'
@@ -270,26 +364,25 @@ proxy_dns
 [ProxyList]
 socks5 127.0.0.1 9050
 PROXYCHAINS
+    blog "[BOOT] Tor proxy enabled"
 fi
 
-# --- PERMISSIONS ---
-chown -R user:user /home/user/.vnc
-chown -R user:user /home/user/.config
-chown user:user /home/user/Desktop
-chown user:user /home/user/Documents
-chown user:user /home/user/Downloads
-chown user:user /home/user/.backups
-chown user:user /home/user/Drive
-chown -R user:user /home/user 2>/dev/null || true
+# ---------------- PERMISSIONS ----------------
+# Top-level + small dirs only; a recursive chown over a big Railway volume
+# would slow every boot and touch user data timestamps.
+chown user:user /home/user
+for d in Desktop Documents Downloads Projects Drive .backups .wallpapers .cache .local .ssh; do
+    chown -R user:user "/home/user/$d" 2>/dev/null || true
+done
+chown -R user:user /home/user/.config 2>/dev/null || true
 
-# --- DBUS ---
+# ---------------- DBUS ----------------
 mkdir -p /run/dbus
 rm -f /run/dbus/pid
-dbus-uuidgen --ensure
+dbus-uuidgen --ensure 2>/dev/null || true
+blog "[BOOT] D-Bus OK"
 
-mkdir -p /var/log/supervisor
-
-# --- SHUTDOWN HANDLER ---
+# ---------------- SHUTDOWN HANDLER ----------------
 _term_handler() {
     echo "SIGTERM: saving data..."
     if [ "$AUTO_BACKUP_ON_EXIT" = "1" ]; then
@@ -303,6 +396,43 @@ _term_handler() {
 }
 trap _term_handler SIGTERM SIGINT
 
+# ---------------- START SUPERVISORD ----------------
 /usr/bin/supervisord -c /etc/supervisor/supervisord.conf &
 SUP_PID=$!
+blog "[HTTP] Starting server (port $PORT)"
+blog "[WS] WebSocket bridge pending"
+
+# ---------------- READINESS GATE (background reporter) ----------------
+port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+(
+    # [VNC] wait for port 5901
+    VNC_DEADLINE=$(( $(date +%s) + BOOT_GRACE_SEC ))
+    VNC_UP=0
+    while [ "$(date +%s)" -lt "$VNC_DEADLINE" ]; do
+        if port_open 5901; then VNC_UP=1; break; fi
+        sleep 1
+    done
+    if [ "$VNC_UP" != "1" ]; then
+        blog "[ERROR] VNC failed to open 5901 within ${BOOT_GRACE_SEC}s"
+        exit 0
+    fi
+    blog "[VNC] Waiting for 5901... done"
+    blog "[VNC] Ready"
+
+    # [XFCE] wait for session process
+    XF_DEADLINE=$(( $(date +%s) + BOOT_GRACE_SEC ))
+    while [ "$(date +%s)" -lt "$XF_DEADLINE" ]; do
+        if pgrep -x xfce4-session >/dev/null 2>&1; then
+            blog "[XFCE] Starting desktop... done"
+            blog "[XFCE] Ready"
+            blog "[WS] WebSocket bridge ready"
+            blog "[SYSTEM] Desktop READY"
+            exit 0
+        fi
+        sleep 1
+    done
+    blog "[ERROR] XFCE did not start within ${BOOT_GRACE_SEC}s (watchdog will retry)"
+) &
+
 wait "$SUP_PID"

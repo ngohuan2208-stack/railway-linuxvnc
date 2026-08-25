@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
-"""Ultra RAM saver: suspends XFCE desktop when idle, resumes on activity."""
+"""Idle monitor: OPTIONAL desktop suspend to save RAM.
 
+24/7 mode (default): IDLE_TIMEOUT=0 -> the desktop is NEVER suspended.
+The process stays alive with a tiny footprint so supervisord does not
+restart-loop, and so enabling the feature at runtime stays possible via
+env var + redeploy.
+
+Opt-in: set IDLE_TIMEOUT=<seconds> to re-enable suspend-on-idle.
+"""
 import os
 import signal
 import subprocess
 import sys
 import time
 
-IDLE_TIMEOUT = int(os.environ.get("IDLE_TIMEOUT", "300"))
+IDLE_TIMEOUT = int(os.environ.get("IDLE_TIMEOUT", "0"))
 IDLE_CHECK = int(os.environ.get("IDLE_CHECK", "10"))
 DROP_CACHE = os.environ.get("DROP_CACHE", "1") == "1"
 SUSPEND_FILE = "/tmp/desktop_suspended"
 XPRINTIDLE = "/usr/bin/xprintidle"
 DISPLAY = os.environ.get("DISPLAY", ":1")
+
+ENABLED = IDLE_TIMEOUT > 0
 
 
 def log(msg):
@@ -43,7 +52,7 @@ def drop_caches():
 
 
 def suspend_desktop():
-    if is_suspended():
+    if not ENABLED or is_suspended():
         return
     log(f"suspending desktop (idle > {IDLE_TIMEOUT}s)")
 
@@ -98,7 +107,17 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    log(f"started | timeout={IDLE_TIMEOUT}s | check={IDLE_CHECK}s | cache={DROP_CACHE}")
+    if not ENABLED:
+        # clear any stale suspend marker from previous runs
+        resume_desktop()
+        log("disabled (IDLE_TIMEOUT=0) - desktop runs 24/7")
+        # sleep forever with negligible footprint; keeps supervisor state
+        # RUNNING and avoids restart churn
+        while True:
+            time.sleep(3600)
+
+    log(f"started | timeout={IDLE_TIMEOUT}s | check={IDLE_CHECK}s "
+        f"| cache={DROP_CACHE}")
 
     while True:
         time.sleep(IDLE_CHECK)
