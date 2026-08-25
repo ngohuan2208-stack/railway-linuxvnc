@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## 2026-08-25 (4) — Mật khẩu VNC, ảnh màn hình, Buff HDH, VS Code PC, AI CLI
+
+### Thêm mới
+
+1. **Bảng nhập mật khẩu VNC riêng (web UI)**
+   - Khi admin đặt `VNC_PASSWORD` custom, trang hiện modal nhập mật khẩu đẹp (không còn popup xấu của noVNC); mật khẩu giữ trong bộ nhớ trình duyệt, đổi chất lượng ảnh/kết nối lại không phải nhập lần 2.
+
+2. **Chọn chất lượng ảnh màn hình** (sidebar → Hinh Anh)
+   - Đẹp / Cân bằng / Mượt (choi game) / Tiết kiệm băng thông — đổi tức thì bằng cách reload iframe noVNC với `quality`/`compression` tương ứng; lưu localStorage.
+
+3. **Wizard "Buff hệ điều hành"** (`/api/os/profiles`, `/api/tasks/run/os?profile=`)
+   - Hiện lần đầu mở trang; **bấm Bỏ qua = mặc định LXQt siêu nhẹ, đẹp, ổn định**.
+   - 5 profile: `lite` (dọn sâu + tinh chỉnh), `dev` (gcc/cmake/jq/ripgrep/fzf/tmux/sqlite3/strace...), `media` (Inkscape/Krita/Audacity/mpv/HandBrake), `drivers` (FUSE/gvfs/NTFS/exFAT/USB-PCI/SMART/lm-sensors), `ultra` (= dev + media + drivers).
+   - Chạy qua script `os-profile` mới, log realtime ra **web Terminal** (SSE + buffer replay khi mở lại), kết quả JSON tổng hợp. Cài từng gói, lỗi gói nào bỏ qua gói đó không chết cả luồng. Marker `.config/os-profiles/<id>.done` ghi vết.
+
+4. **Web Terminal dùng chung** (`/api/tasks/status|run|stream`)
+   - Modal terminal xem tiến độ mọi job backend (buff HDH, cài VS Code). Đóng modal không làm chết job; mở lại thấy toàn bộ log từ đầu.
+
+5. **Nút Cài VS Code bản PC** (`install-vscode`)
+   - Tự tải .deb stable từ microsoft.com (~100MB) → apt install → tạo icon Desktop, tự kiểm tra kiến trúc amd64 trước. Toàn bộ output stream vào web Terminal.
+
+6. **AI CLI — trợ lý AI toàn quyền chạy lệnh, có "vành đai" an toàn**
+   - Biến Railway: `AI_API_LINK`, `AI_API_KEY`, `AI_MODEL` (+ tuỳ chọn `AI_NAME`, `AI_PROVIDER=openai|gemini`, `AI_TEMPERATURE`, `AI_MAX_TOKENS`, `AI_SYSTEM_PROMPT`, `AI_EXEC_TIMEOUT`). Hỗ trợ mọi API OpenAI-compatible + Gemini.
+   - **Ghi thẳng vào hệ điều hành**: boot ghi config vào `~/.ai-cli/config.json`; CLI `ai` (kèm bộ lọc) nằm sẵn trong `/usr/local/bin` — trong desktop terminal chạy `ai "viec"` hoặc `ai --run "viec"`.
+   - Web UI: nút **AI CLI** — chat, xem lệnh AI đề xuất (lệnh nguy hiểm hiện nhãn đỏ), bật "Tu chay lenh" để tự thực thi tuần tự, output hiển thị inline.
+   - API: `/api/ai/status|chat|exec`. `/api/ai/exec` CHỈ chạy lệnh đã qua bộ lọc an toàn (`ai_safety.py`): chặn rm -rf trên /~/$HOME & thư mục hệ thống, mkfs/fdisk/parted/dd-of=/dev/*, fork bomb, shutdown/reboot/init 0/6, supervisorctl stop/shutdown, kill service nền (Xvnc/dbus/watchdog...), sửa /etc/shadow|passwd|sudoers, gỡ packages VNC/desktop cốt lõi, đụng file platform (/start.sh, supervisord.conf...). Timeout từng lệnh 240s, cắt output 256KB.
+   - `/health` thêm component `ai_cli` (ready/stopped).
+
+### Ghi chú test
+
+| Test | Kết quả |
+|------|---------|
+| Bộ lọc an toàn: 17 lệnh thật (rm -rf /, mkfs, dd, fork bomb, shutdown, pkill Xvnc, sed /start.sh...) | PASS (chặn đúng 11, cho 6 lệnh lành) |
+| `ai` CLI gọi API OpenAI thật (401 key giả → báo lỗi sạch) | PASS |
+| extract_commands: code block ```bash``` + dòng `$ cmd` | PASS |
+| TaskJob stream + parse TASK_RESULT_JSON | PASS |
+| http-server import + 48 routes + ai_status/os_profiles handler | PASS |
+| os-profile lite chạy thật end-to-end | PASS (TASK_RESULT_JSON ok) |
+| bash -n / py_compile / node --check toàn bộ file mới+sửa | PASS |
+
+Chưa test được local: render wizard/modal trên trình duyệt thật (cần màn hình), apt install các profile dev/media/drivers (cần mạng + băng thông), Gemini thực tế.
+
 ## 2026-08-25 (3) — Web cho mọi thiết bị, hình nền, tắt máy, persistence
 
 ### Bug nghiêm trọng đã sửa

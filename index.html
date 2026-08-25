@@ -132,6 +132,39 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 .wp-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
 #wp-preview{display:none;max-width:220px;max-height:120px;border-radius:8px;border:1px solid var(--border)}
 #wp-current-txt{font-size:10px;color:var(--dim)}
+/* image quality */
+.img-select{background:#111a2e;color:var(--text);border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:10.5px;padding:4px 6px;outline:none;max-width:150px}
+.img-select:focus{border-color:var(--accent)}
+/* password prompt */
+.pw-card{width:min(360px,92vw);background:#0d1424;border:1px solid var(--border);border-radius:12px;padding:24px 22px;text-align:center}
+.pw-icon{width:40px;height:40px;margin:0 auto 12px;background:rgba(59,130,246,.1);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.pw-icon svg{width:20px;height:20px;fill:var(--accent)}
+.pw-input{width:100%;padding:10px 12px;background:#060a13;border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;margin:12px 0 6px;outline:none;text-align:center;letter-spacing:2px}
+.pw-input:focus{border-color:var(--accent)}
+/* OS wizard */
+.wiz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:12px}
+.wiz-card{background:#111a2e;border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s,transform .15s}
+.wiz-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.wiz-card h4{font-size:11.5px;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.wiz-card p{font-size:10.5px;color:var(--dim);line-height:1.55;margin:0}
+.wiz-tag{display:inline-block;font-size:9px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,.15);color:var(--green);margin-bottom:8px;text-transform:uppercase}
+.wiz-note{margin-top:12px}
+/* web terminal */
+.term-out{background:#060a13;border:1px solid var(--border);border-radius:8px;padding:10px;height:46vh;overflow:auto;font-size:10.5px;color:#94a3b8;white-space:pre-wrap;word-break:break-all}
+.term-cmdline{color:#93c5fd}
+/* AI CLI */
+.ai-log{background:#060a13;border:1px solid var(--border);border-radius:8px;padding:10px;height:44vh;overflow-y:auto;margin-bottom:10px}
+.ai-msg{margin-bottom:8px;padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.65;word-break:break-word}
+.ai-msg.user{background:rgba(59,130,246,.12);border-left:3px solid var(--accent)}
+.ai-msg.bot{background:#111a2e;border-left:3px solid var(--green)}
+.ai-msg.err{background:rgba(239,68,68,.08);border-left:3px solid var(--red)}
+.ai-msg pre{white-space:pre-wrap;word-break:break-all;margin:4px 0 0;font-family:inherit;font-size:10.5px;color:#94a3b8}
+.ai-cmdline{font-size:10.5px;background:#0a101f;border:1px dashed var(--border);border-radius:6px;padding:5px 8px;margin:4px 0 8px 16px;color:#93c5fd;word-break:break-all}
+.ai-denied{color:var(--red);font-weight:600}
+.ai-inrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ai-inrow input[type=text]{flex:1;min-width:160px;padding:9px 11px;background:#060a13;border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:11.5px;outline:none}
+.ai-inrow input[type=text]:focus{border-color:var(--accent)}
+.ai-setup code{color:#93c5fd}
 @media(max-width:768px){
 #sidebar{display:none}
 body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left:0;top:0}
@@ -240,7 +273,22 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
 
   <div class="section">
     <div class="section-title">
-      <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      Hinh Anh
+    </div>
+    <div class="stat-row"><span class="stat-label">Chat luong</span>
+      <select class="img-select" id="img-quality" onchange="applyImgQuality(this.value)">
+        <option value="beauty">Dep (nang)</option>
+        <option value="balance">Can bang</option>
+        <option value="smooth">Muon (choi game)</option>
+        <option value="save">Tiet kiem mang</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
       System
     </div>
     <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value" id="sys-uptime">--</span></div>
@@ -261,6 +309,7 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
     <div class="svc-row"><span class="svc-name">WebSocket</span><span class="svc-chip starting" id="svc-websocket">STARTING</span></div>
     <div class="svc-row"><span class="svc-name">HTTP Server</span><span class="svc-chip starting" id="svc-http">STARTING</span></div>
     <div class="svc-row"><span class="svc-name">Code Server</span><span class="svc-chip starting" id="svc-code_server">STOPPED</span></div>
+    <div class="svc-row"><span class="svc-name">AI CLI</span><span class="svc-chip starting" id="svc-ai_cli">STOPPED</span></div>
   </div>
 
   <div class="tools">
@@ -318,6 +367,26 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
         Tat may
       </button>
     </div>
+    <div class="tool-row">
+      <button class="tool-btn" id="btn-vscode-native" onclick="installVscodeNative(this)">
+        <svg viewBox="0 0 24 24"><path d="M20 19.59V8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c.45 0 .85-.15 1.19-.4l-4.43-4.43c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L20 19.59zM13 9V3.5L18.5 9H13z"/></svg>
+        Cai VS Code
+      </button>
+      <button class="tool-btn" onclick="openWizard()">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        Buff HDH
+      </button>
+    </div>
+    <div class="tool-row">
+      <button class="tool-btn" id="btn-ai-cli" onclick="openAI()">
+        <svg viewBox="0 0 24 24"><path d="M12 2l1.9 5.7L19.6 9.6l-5.7 1.9L12 17.2l-1.9-5.7L4.4 9.6l5.7-1.9L12 2zm7 11l.95 2.85L22.8 16.8l-2.85.95L19 20.6l-.95-2.85-2.85-.95 2.85-.95L19 13zM5 16l.72 2.16L7.88 18.88l-2.16.72L5 21.76l-.72-2.16-2.16-.72 2.16-.72L5 16z"/></svg>
+        AI CLI
+      </button>
+      <button class="tool-btn" onclick="restartDesktopOnly()">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        Restart DE
+      </button>
+    </div>
   </div>
 </div>
 
@@ -370,6 +439,12 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
         <p>Nut Hinh nen o sidebar: chon 1 trong 6 gradient co san hoac upload anh cua ban (PNG/JPG toi da 8MB). Lua chon duoc luu vao volume - khong mat khi restart.</p>
         <h3>Tat may / Khoi dong lai</h3>
         <p>Nut Tat may o sidebar se backup du lieu roi khoi dong lai container (~30 giay). Du lieu tren volume van con nguyen khi quay lai.</p>
+        <h3>Buff he dieu hanh</h3>
+        <p>Lan dau mo trang se hoi chon "He Dieu Hanh": Lite Sieu Nhe / Developer / Media &amp; Design / Driver &amp; Phan cung / BUFF TAT CA. Bam Bo qua neu muon giu mac dinh LXQt nhe - dep - on dinh. Co the mo lai bang nut Buff HDH o sidebar.</p>
+        <h3>Cai VS Code ban PC</h3>
+        <p>Nut Cai VS Code tai .deb tu microsoft.com (~100MB) va cai tu dong - tien do hien trong cua so Terminal. Sau khi cai, icon VS Code xuat hien tren Desktop. (Nhe hon: nut VS Code = code-server web, co san luon.)</p>
+        <h3>AI CLI</h3>
+        <p>Nut AI CLI mo tro chuyen voi AI (can dat AI_API_LINK, AI_API_KEY, AI_MODEL tren Railway). AI tra loi va de xuat lenh; bat "Tu chay lenh" de no tu thuc thi. Lenh pha hoai he thong (rm -rf /, mkfs, shutdown...) bi chan tu dong. Trong terminal desktop: <b>ai "viec can lam"</b>.</p>
         <h3>Mo Terminal</h3>
         <p>Cach 1: nut Terminal o sidebar. Cach 2: menu Applications > Terminal Emulator.</p>
         <div class="code-block"><code>xfce4-terminal</code><button class="copy-btn">Copy</button></div>
@@ -482,10 +557,18 @@ DESKTOP=lxqt           # lxqt (nhe, mac dinh) | xfce
 RESOLUTION=1600x900
 VNC_DEPTH=24
 VNC_FPS=30
+VNC_PASSWORD=...       # mat khau VNC (none = tat)
 IDLE_TIMEOUT=0         # 0 = chay 24/7, khong sleep
 ENABLE_PROXY=0         # 1 = bat Tor
 ENABLE_AUDIO=0
 MEM_LIMIT_MB=1228</code><button class="copy-btn">Copy</button></div>
+        <h3>AI CLI (bat bang bien)</h3>
+        <div class="code-block"><code>AI_API_LINK=https://api.openai.com/v1
+AI_API_KEY=sk-...
+AI_MODEL=gpt-4o-mini
+AI_NAME=Claude         # ten hien thi (tu chon)
+AI_PROVIDER=openai     # openai | gemini (tu chon)</code><button class="copy-btn">Copy</button></div>
+        <p>Sau khi dat bien, config duoc ghi vao ~/.ai-cli/config.json va lenh <b>ai</b> san sang trong terminal desktop.</p>
         <h3>Domain</h3>
         <p>Settings > Networking > Generate Domain. Web desktop chay ngay tai domain do.</p>
         <h3>Logs / Restart / Redeploy</h3>
@@ -586,6 +669,121 @@ MEM_LIMIT_MB=1228</code><button class="copy-btn">Copy</button></div>
         <span id="log-status-txt" style="font-size:11px;color:var(--dim)"></span>
       </div>
       <div id="log-content">(trong)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PASSWORD PROMPT ================= -->
+<div class="modal" id="modal-pass">
+  <div class="pw-card">
+    <div class="pw-icon">
+      <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm3 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+    </div>
+    <h3 style="font-size:14px;margin-bottom:4px">Nhap mat khau VNC</h3>
+    <p style="font-size:10.5px;color:var(--dim);line-height:1.5">Mat khau duoc dat bang bien <b>VNC_PASSWORD</b> tren Railway.<br>Mac dinh: <b>railwaylinux</b></p>
+    <input type="password" class="pw-input" id="pw-value" autocomplete="off" placeholder="mat khau..." onkeydown="if(event.keyCode===13)pwSubmit()">
+    <label style="font-size:10px;color:var(--dim);display:flex;gap:5px;align-items:center;justify-content:center;cursor:pointer"><input type="checkbox" id="pw-show" onchange="$('pw-value').type=this.checked?'text':'password'"> Hien mat khau</label>
+    <button class="btn" style="width:100%;margin-top:12px;padding:10px" onclick="pwSubmit()">Ket noi</button>
+  </div>
+</div>
+
+<!-- ================= OS WIZARD (buff) ================= -->
+<div class="modal" id="modal-wizard">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M12 2l1.9 5.7L19.6 9.6l-5.7 1.9L12 17.2l-1.9-5.7L4.4 9.6l5.7-1.9L12 2z"/></svg>
+      Chon He Dieu Hanh
+      <button class="modal-close" onclick="wizClose()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:#cbd5e1">Ban muon <b style="color:var(--accent)">buff he dieu hanh</b> voi bo tool toi uu? Neu <b>Bo qua</b>, he thong giu mac dinh: LXQt sieu nhe - dep - on dinh.</p>
+      <div class="wiz-grid">
+        <div class="wiz-card" onclick="wizSkip()">
+          <span class="wiz-tag" style="background:rgba(245,158,11,.15);color:var(--amber)">Mac dinh</span>
+          <h4>Bo qua</h4>
+          <p>LXQt nhe, dep, on dinh. Khong cai them gi - phu hop voi goi RAM nho.</p>
+        </div>
+        <div class="wiz-card" onclick="wizPick('lite')">
+          <span class="wiz-tag">Nhe nhat</span>
+          <h4>Lite Sieu Nhe</h4>
+          <p>Don dep sau cai + tinh chinh hieu nang. Rat nhanh, gan khong ton them RAM.</p>
+        </div>
+        <div class="wiz-card" onclick="wizPick('dev')">
+          <span class="wiz-tag">Developer</span>
+          <h4>Developer Day Du</h4>
+          <p>gcc/cmake, jq, ripgrep, fzf, tmux, sqlite3, strace, python venv... day du tool lap trinh.</p>
+        </div>
+        <div class="wiz-card" onclick="wizPick('media')">
+          <span class="wiz-tag">Media</span>
+          <h4>Media &amp; Design</h4>
+          <p>Inkscape, Krita, Audacity, mpv, HandBrake - ve, chup anh, convert video.</p>
+        </div>
+        <div class="wiz-card" onclick="wizPick('drivers')">
+          <span class="wiz-tag">Phan cung</span>
+          <h4>Driver &amp; Phan Cung</h4>
+          <p>FUSE + gvfs, doc NTFS/exFAT, USB/PCI tools, SMART, cam bien nhiet do.</p>
+        </div>
+        <div class="wiz-card" onclick="wizPick('ultra')">
+          <span class="wiz-tag" style="background:rgba(168,85,247,.15);color:var(--purple)">Max power</span>
+          <h4>BUFF TAT CA</h4>
+          <p>dev + media + drivers trong mot luot. Tai nhieu (~500MB+), chay lau hon.</p>
+        </div>
+      </div>
+      <div class="note wiz-note">Cac goi tai qua mang (apt) va hien tien do trong cua so Terminal. Du lieu khong bi anh huong.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= WEB TERMINAL ================= -->
+<div class="modal" id="modal-term">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M20 19.59V8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c.45 0 .85-.15 1.19-.4L20 19.59zM9 4h6v6H9V4z"/></svg>
+      <span id="term-title">Terminal</span>
+      <button class="modal-close" onclick="closeModal('modal-term');termDisconnect()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="log-controls">
+        <span id="term-status-txt" style="font-size:11px;color:var(--dim)"></span>
+        <button class="btn secondary" style="margin-left:auto" onclick="termConnect()">Ket noi lai stream</button>
+      </div>
+      <div class="term-out" id="term-out">(cho job bat dau...)</div>
+      <div class="note">Dong cua so nay KHONG lam dung job - no tiep tuc chay nen, mo lai se thay toan bo log.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= AI CLI ================= -->
+<div class="modal" id="modal-ai">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M12 2l1.9 5.7L19.6 9.6l-5.7 1.9L12 17.2l-1.9-5.7L4.4 9.6l5.7-1.9L12 2z"/></svg>
+      <span id="ai-name-txt">AI CLI</span>
+      <button class="modal-close" onclick="closeModal('modal-ai')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="ai-setup" style="display:none">
+        <div class="warnbox">AI CLI chua duoc cau hinh. Them cac bien sau tren Railway (Variables) roi redeploy:</div>
+        <div class="code-block"><code>AI_API_LINK=https://api.openai.com/v1   # link API (OpenAI-compatible hoac Gemini)
+AI_API_KEY=sk-...                        # apikey
+AI_MODEL=gpt-4o-mini                     # ten model
+# Tu chon:
+AI_NAME=Claude                           # ten hien thi
+AI_PROVIDER=openai                       # openai | gemini</code><button class="copy-btn">Copy</button></div>
+        <p style="font-size:11px;color:var(--dim)">Sau khi dat bien, config duoc ghi san vao he dieu hanh (~/.ai-cli/config.json) - trong terminal desktop co lenh <code style="color:#93c5fd">ai "viec can lam"</code>.</p>
+      </div>
+      <div id="ai-main" style="display:none">
+        <div class="ai-log" id="ai-log"></div>
+        <div class="ai-inrow">
+          <input type="text" id="ai-in" placeholder="Viec ban can lam? vi du: cai dat vlc va mo luon..." onkeydown="if(event.keyCode===13)aiSend()">
+          <button class="btn" id="ai-send-btn" onclick="aiSend()">Gui</button>
+        </div>
+        <div class="opt-controls" style="margin-top:10px;margin-bottom:0">
+          <label class="chk"><input type="checkbox" id="ai-auto"> Tu chay lenh (AI de xuat gi thi chay do - tru lenh nguy hai da bi chan)</label>
+          <button class="btn secondary" style="margin-left:auto" onclick="$('ai-log').innerHTML=''">Xoa</button>
+        </div>
+        <p id="ai-status-txt" style="font-size:10.5px;color:var(--dim);min-height:14px;margin-top:6px"></p>
+      </div>
     </div>
   </div>
 </div>
@@ -788,7 +986,8 @@ function renderServices(h){
   var lbl={'ready':'READY','starting':'STARTING','waiting':'STARTING',
            'stopped':'STOPPED','failed':'FAILED','suspended':'WARNING'};
   var rows=[['http','svc-http'],['vnc','svc-vnc'],['desktop','svc-desktop'],
-            ['websocket','svc-websocket'],['code_server','svc-code_server']];
+            ['websocket','svc-websocket'],['code_server','svc-code_server'],
+            ['ai_cli','svc-ai_cli']];
   for(var i=0;i<rows.length;i++){
     var c=h.components[rows[i][0]];
     var st=c?c.state:'unknown';
@@ -818,17 +1017,56 @@ function reconnectVNC(){
 }
 
 /* ================= VNC IFRAME BOOTSTRAP =================
-   Default password is auto-filled for seamless login; custom
-   passwords are NEVER sent to the browser (noVNC prompts).   */
-var vncBase='/novnc/vnc.html?autoconnect=true&resize=scale&quality=9&compression=6&reconnect=true&reconnect_delay=2000&path=websockify';
+   Custom password (VNC_PASSWORD) is asked in our own styled prompt;
+   the value stays in browser memory only. Default password is
+   auto-filled for seamless login. Image quality presets change
+   noVNC quality/compression params live (reload iframe).          */
+var IMG_PRESETS={
+  beauty:{q:9,c:5},
+  balance:{q:7,c:7},
+  smooth:{q:6,c:9},
+  save:{q:3,c:9}
+};
+var lastPw='';
+function curImgKey(){
+  var k=null;
+  try{k=localStorage.getItem('rd_img')}catch(e){}
+  return(k&&IMG_PRESETS[k])?k:'balance';
+}
+function frameUrl(q,c){
+  var url='/novnc/vnc.html?autoconnect=true&resize=scale&quality='+q+'&compression='+c+'&reconnect=true&reconnect_delay=2000&path=websockify';
+  if(lastPw)url+='&password='+encodeURIComponent(lastPw);
+  return url;
+}
+function setFrameFromPreset(){
+  var p=IMG_PRESETS[curImgKey()];
+  $('vnc-frame').src=frameUrl(p.q,p.c);
+}
 function loadVNCFrame(){
   reqJSON('GET','/api/session',null,function(err,s){
-    var url=vncBase;
-    if(s&&s.password){url+='&password='+encodeURIComponent(s.password)}
-    $('vnc-frame').src=url;
+    s=s||{};
+    if(s.password){lastPw=s.password;setFrameFromPreset();return}
+    if(s.auth&&!s.password&&!lastPw){
+      /* admin set a custom VNC password -> show our prompt */
+      openModal('modal-pass');
+      setTimeout(function(){var el=$('pw-value');if(el)el.focus()},250);
+      return;
+    }
+    setFrameFromPreset();
   });
 }
-loadVNCFrame();
+function pwSubmit(){
+  var v=$('pw-value').value;
+  closeModal('modal-pass');
+  if(v)lastPw=v;
+  setFrameFromPreset();
+}
+function applyImgQuality(key){
+  try{localStorage.setItem('rd_img',key)}catch(e){}
+  var p=IMG_PRESETS[key]||IMG_PRESETS.balance;
+  $('img-quality').value=key;
+  $('vnc-frame').src=frameUrl(p.q,p.c);
+}
 
 /* ================= APP LAUNCHERS ================= */
 function launchApp(name,btn){
@@ -876,6 +1114,8 @@ function closeModal(id){$(id).className=$(id).className.replace(/ open/g,'')}
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     closeModal('modal-guide');closeModal('modal-optimizer');closeModal('modal-logs');closeModal('modal-wallpaper');
+    closeModal('modal-wizard');closeModal('modal-term');closeModal('modal-ai');
+    termDisconnect();
     optStopStream();
   }
 });
@@ -1195,6 +1435,217 @@ function restartDesktopOnly(){
   });
 }
 
+/* ================= OS WIZARD (buff he dieu hanh) ================= */
+var WIZ_KEY='rd_os_wizard_v1';
+function openWizard(){openModal('modal-wizard')}
+function wizClose(){closeModal('modal-wizard')}
+function wizRemember(v){try{localStorage.setItem(WIZ_KEY,v)}catch(e){}}
+function wizFirstRun(){
+  var done=false;
+  try{done=!!localStorage.getItem(WIZ_KEY)}catch(e){}
+  if(!done)setTimeout(openWizard,800);
+}
+function wizSkip(){
+  wizRemember('skip');
+  wizClose();
+}
+function wizPick(profile){
+  reqJSON('POST','/api/tasks/run/os?profile='+encodeURIComponent(profile),null,function(err,j){
+    if(err||(j&&(j.status!=='started'))){
+      alert(((j&&j.status)||'loi')+' - job khac dang chay? Thu lai sau.');
+      return;
+    }
+    wizRemember(profile);
+    wizClose();
+    openTermView('Buff HDH: '+profile);
+  });
+}
+
+/* ================= WEB TERMINAL (task stream viewer) =================
+   Xem log realtime cua job backend (cai VS Code, buff HDH...).
+   Dong modal KHONG dung job - stream replay tu buffer khi mo lai.   */
+var termSrc=null;
+function termConnect(){
+  termDisconnect();
+  var o=$('term-out');
+  o.textContent='';
+  $('term-status-txt').textContent='Dang ket noi stream...';
+  if(!window.EventSource){
+    o.textContent='Trinh duyet khong ho tro SSE. Dung trinh duyet moi hon de xem tien do.';
+    return;
+  }
+  termSrc=new EventSource('/api/tasks/stream');
+  termSrc.onmessage=function(ev){
+    if(ev.data==='__END__'){termDisconnect();return}
+    var e;
+    try{e=JSON.parse(ev.data)}catch(x){return}
+    if(!e||!e.line)return;
+    termAppend(e.line);
+  };
+  termSrc.onerror=function(){$('term-status-txt').textContent='Mat ket noi stream - bam "Ket noi lai stream"'};
+  $('term-status-txt').textContent='';
+}
+function termDisconnect(){
+  if(termSrc){try{termSrc.close()}catch(e){}termSrc=null}
+}
+function termAppend(line){
+  var o=$('term-out');
+  if(line.indexOf('TASK_RESULT_JSON:')===0){
+    try{
+      var r=JSON.parse(line.substring(17));
+      var bits=[];
+      if(r.ok===true)bits.push('THANH CONG');
+      else if(r.ok===false)bits.push('CO LOI');
+      if(r.profile)bits.push('profile='+r.profile);
+      if(r.packages_ok!=null)bits.push('goi OK: '+r.packages_ok);
+      if(r.version)bits.push('version: '+r.version);
+      if(r.errors!=null)bits.push('loi: '+r.errors);
+      if(r.duration_s!=null)bits.push('thoi gian: '+r.duration_s+'s');
+      $('term-status-txt').textContent=bits.join(' | ');
+    }catch(e){}
+    return;
+  }
+  if(o.textContent==='(cho job bat dau...)')o.textContent='';
+  o.textContent+=line+'\n';
+  o.scrollTop=o.scrollHeight;
+}
+function openTermView(title){
+  $('term-title').textContent=title||'Terminal';
+  openModal('modal-term');
+  termConnect();
+}
+
+/* ================= CAI VS CODE (PC) ================= */
+function installVscodeNative(btn){
+  if(!confirm('Cai Visual Studio Code ban PC (.deb ~100MB tu microsoft.com)?\nTien do hien trong cua so Terminal.'))return;
+  var old=btn.innerHTML;
+  btn.disabled=true;btn.innerHTML='Dang tai...';
+  function done(){btn.disabled=false;btn.innerHTML=old}
+  reqJSON('POST','/api/tasks/run/vscode',null,function(err,j){
+    done();
+    if(err||(j&&j.status!=='started')){
+      alert(((j&&j.status)||'Loi ket noi')+'. Job khac co the dang chay.');
+      return;
+    }
+    openTermView('Cai Visual Studio Code (PC)');
+  });
+}
+
+/* ================= AI CLI ================= */
+var aiEnabled=false,aiBusy=false;
+function openAI(){
+  openModal('modal-ai');
+  reqJSON('GET','/api/ai/status',null,function(err,j){
+    j=j||{};
+    aiEnabled=!!j.enabled;
+    var nm=j.name?('AI CLI - '+(j.name||'')+(j.model?' ('+j.model+')':'')):'AI CLI';
+    $('ai-name-txt').textContent=nm;
+    $('ai-setup').style.display=aiEnabled?'none':'block';
+    $('ai-main').style.display=aiEnabled?'block':'none';
+  });
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function aiMsg(cls,textHtml){
+  var d=document.createElement('div');
+  d.className='ai-msg '+cls;
+  d.innerHTML=textHtml;
+  var l=$('ai-log');l.appendChild(d);l.scrollTop=l.scrollHeight;
+  return d;
+}
+function aiPost(url,obj,cb){
+  /* JSON POST with long timeout (AI tra loi co the mat 30-90s) */
+  var body=null;
+  try{body=JSON.stringify(obj)}catch(e){}
+  if(window.fetch){
+    var fin=false;
+    function finish(e,t){if(fin)return;fin=true;
+      if(e){cb(e,null);return}
+      var j=null;try{j=JSON.parse(t)}catch(x){}
+      cb(null,j);
+    }
+    fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:body})
+      .then(function(r){return r.text()})
+      .then(function(t){finish(null,t)},function(e){finish(e,null)});
+    setTimeout(function(){if(!fin)finish('timeout',null)},150000);
+  }else{
+    try{
+      var x=new XMLHttpRequest();
+      x.open('POST',url,true);
+      x.timeout=150000;
+      x.setRequestHeader('Content-Type','application/json');
+      x.onload=function(){var j=null;try{j=JSON.parse(x.responseText)}catch(e){}cb(null,j)};
+      x.onerror=function(){cb(1,null)};
+      x.ontimeout=function(){cb('timeout',null)};
+      x.send(body);
+    }catch(e){cb(e,null)}
+  }
+}
+function aiSend(){
+  if(aiBusy||!aiEnabled)return;
+  var inp=$('ai-in'),p=(inp.value||'').replace(/^\s+|\s+$/g,'');
+  if(!p)return;
+  inp.value='';
+  aiMsg('user',esc(p));
+  aiBusy=true;$('ai-send-btn').disabled=true;
+  $('ai-status-txt').textContent='Dang nghi... (co the mat den 1-2 phut)';
+  aiPost('/api/ai/chat',{prompt:p},function(err,j){
+    aiBusy=false;$('ai-send-btn').disabled=false;
+    if(err){$('ai-status-txt').textContent='';aiMsg('err','Khong lien he duoc AI API. Kiem tra AI_API_LINK / AI_API_KEY / mang.');return}
+    if(j&&j.status==='error'){
+      $('ai-status-txt').textContent='';
+      aiMsg('err','API loi: '+esc(j.msg||'khong ro'));return;
+    }
+    if(!j||!j.reply){$('ai-status-txt').textContent='';aiMsg('err','Phan hoi trong.');return}
+    $('ai-status-txt').textContent='';
+    aiMsg('bot',esc(j.reply).replace(/\n/g,'<br>'));
+    var cmds=[],i,c;
+    for(i=0;j.commands&&i<j.commands.length;i++){
+      c=j.commands[i];
+      var d=document.createElement('div');
+      d.className='ai-cmdline';
+      d.innerHTML='<span style="color:'+(c.ok?'#22c55e':'#ef4444')+'">'+(c.ok?'$ ':'BI CHAN ')+'</span> '+esc(c.cmd)+(c.ok?'':' <span class="ai-denied">['+esc(c.reason||'nguy hai')+']</span>');
+      $('ai-log').appendChild(d);
+      if(c.ok)cmds.push(c.cmd);
+    }
+    $('ai-log').scrollTop=$('ai-log').scrollHeight;
+    var auto=false;
+    try{auto=$('ai-auto').checked}catch(e){}
+    if(auto&&cmds.length)runAiCmds(cmds);
+    else if(cmds.length)$('ai-status-txt').textContent=cmds.length+' lenh san sang - bat "Tu chay lenh" hoac copy vao terminal.';
+  });
+}
+function runAiCmds(cmds){
+  var i=0,total=cmds.length;
+  (function next(){
+    if(i>=total){$('ai-status-txt').textContent='Da chay xong '+total+'/'+total+' lenh.';return}
+    var c=cmds[i];
+    $('ai-status-txt').textContent='Dang chay lenh '+(i+1)+'/'+total+'...';
+    aiPost('/api/ai/exec',{command:c},function(err,j){
+      if(err){aiMsg('err','Loi ket noi khi chay lenh.')}
+      else if(j&&j.denied){aiMsg('err','<span class="ai-denied">LENH BI CHAN:</span> '+esc(j.reason||'nguy hai')+'<pre>'+esc(c)+'</pre>')}
+      else{
+        var out=((j&&j.output)||'(khong co output)');
+        if(out.length>4000)out=out.substring(out.length-4000);
+        var html='<b style="color:#93c5fd">$ '+esc(c)+'</b><pre>'+esc(out)+'</pre>';
+        if(j&&j.rc)html+='<span class="ai-denied">exit code: '+j.rc+'</span>';
+        aiMsg('bot',html);
+      }
+      i++;next();
+    });
+  })();
+}
+(function(){
+  var a=null;
+  try{a=document.getElementById('ai-auto')}catch(e){}
+  if(!a)return;
+  try{a.checked=localStorage.getItem('rd_ai_auto')==='1'}catch(e){}
+  a.onchange=function(){try{localStorage.setItem('rd_ai_auto',a.checked?'1':'0')}catch(e){}};
+})();
+
+/* init */
+$('img-quality').value=curImgKey();
+wizFirstRun();
+loadVNCFrame();
 </script>
 </body>
 </html>

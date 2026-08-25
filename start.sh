@@ -418,6 +418,31 @@ write_once /home/user/.config/chromium/Default/Preferences << 'CHROMIUM'
 CHROMIUM
 fi
 
+# ---------------- AI CLI ----------------
+# Config is REWRITTEN each boot from Railway env (AI_API_LINK/AI_API_KEY/
+# AI_MODEL/...) so changing a variable on Railway updates the OS config.
+# The `ai` CLI + safety filter live in /usr/local/bin (baked in image).
+export AI_API_LINK="${AI_API_LINK:-${AI_API_URL:-}}" AI_API_KEY="${AI_API_KEY:-}"
+export AI_MODEL="${AI_MODEL:-}" AI_NAME="${AI_NAME:-AI Assistant}"
+export AI_PROVIDER="${AI_PROVIDER:-openai}" AI_EXEC_TIMEOUT="${AI_EXEC_TIMEOUT:-240}"
+mkdir -p /home/user/.ai-cli /home/user/.config/os-profiles
+cat > /home/user/.ai-cli/config.json << AIJSON
+{
+  "provider": "${AI_PROVIDER}",
+  "api_link": "${AI_API_LINK}",
+  "api_key": "${AI_API_KEY}",
+  "model": "${AI_MODEL}",
+  "name": "${AI_NAME}"
+}
+AIJSON
+chmod 600 /home/user/.ai-cli/config.json 2>/dev/null || true
+chown -R user:user /home/user/.ai-cli 2>/dev/null || true
+if [ -n "$AI_API_LINK" ] && [ -n "$AI_API_KEY" ] && [ -n "$AI_MODEL" ]; then
+    blog "[BOOT] AI CLI ready ($AI_NAME / $AI_MODEL)"
+else
+    blog "[BOOT] AI CLI disabled (set AI_API_LINK, AI_API_KEY, AI_MODEL to enable)"
+fi
+
 # ---------------- FIREFOX ----------------
 mkdir -p /home/user/.mozilla/firefox/default-release
 if [ ! -f /home/user/.mozilla/firefox/default-release/user.js ]; then

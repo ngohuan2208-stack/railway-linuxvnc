@@ -9,11 +9,16 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 - **noVNC** + sidebar theo dõi CPU/RAM/Disk/Network/Uptime real-time
 - **24/7 mode** — desktop KHÔNG tự sleep/suspend khi idle
 - **Tự phục hồi** — watchdog tự restart Xvnc / Desktop / HTTP / code-server khi chết (có backoff, chống restart-loop)
-- **/health** — health check chi tiết từng component (VNC, Desktop, WebSocket, HTTP, Code Server)
+- **/health** — health check chi tiết từng component (VNC, Desktop, WebSocket, HTTP, Code Server, AI CLI)
 - **System Optimizer** — dọn dẹp an toàn ngay trên web UI, có dry-run, xem log realtime
+- **Buff hệ điều hành** — wizard chọn profile tối ưu: Lite Siêu Nhẹ / Developer / Media & Design / Driver & Phần cứng / BUFF TAT CA (bỏ qua = giữ mặc định LXQt nhẹ - đẹp - ổn định)
+- **Cài VS Code PC** — 1 nút: tự tải .deb từ microsoft.com và cài, tiến độ hiển thị trong web Terminal
+- **AI CLI** — trợ lý AI có toàn quyền chạy lệnh trong desktop (web UI + lệnh `ai` trong terminal), tự động chặn lệnh phá hoại (rm -rf /, mkfs, shutdown...)
 - **Guide** — hướng dẫn sử dụng đầy đủ trong web UI (nút góc trái dưới)
 - **Logs viewer** — xem log hệ thống/VNC/Desktop/WebSocket/Optimizer trực tiếp
-- **VS Code** (code-server) lazy-start, tự phục hồi
+- **VS Code web** (code-server) lazy-start, tự phục hồi
+- **Hình nền** — 6 gradient preset + upload ảnh riêng
+- **Chất lượng ảnh màn hình** — chọn Đẹp / Cân bằng / Mượt / Tiết kiệm băng thông ngay trên sidebar
 - **Bàn phím ảo** Onboard
 - **YouTube** playback (Chromium + codecs)
 - **Tor proxy** tùy chọn
@@ -65,6 +70,14 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 | `BOOT_GRACE_SEC` | `240` | Thời gian "grace" lúc boot trước khi /health báo FAILED |
 | `VNC_CONNECT_WINDOW` | `120` | Số giây WebSocket bridge chờ Xvnc trước khi từ chối |
 | `CODE_START_TIMEOUT` | `30` | Timeout chờ code-server lên port khi bấm VS Code |
+| `AI_API_LINK` | _(trống)_ | Link API AI (OpenAI-compatible, vd `https://api.openai.com/v1`, hoặc Gemini) |
+| `AI_API_KEY` | _(trống)_ | API key của dịch vụ AI |
+| `AI_MODEL` | _(trống)_ | Tên model (vd `gpt-4o-mini`, `gemini-1.5-flash`) |
+| `AI_NAME` | `AI Assistant` | Tên hiển thị của AI |
+| `AI_PROVIDER` | `openai` | `openai` hoặc `gemini` (thường tự nhận diện theo link) |
+| `AI_EXEC_TIMEOUT` | `240` | Timeout (giây) tối đa cho 1 lệnh AI chạy |
+
+> Đặt đủ 3 biến `AI_API_LINK`, `AI_API_KEY`, `AI_MODEL` là bật AI CLI. Config được ghi sẵn vào hệ điều hành (`~/.ai-cli/config.json`) — trong terminal desktop gõ `ai "viec can lam"` hoặc `ai --run "viec can lam"` để AI tự làm.
 
 ### Optional components (build-time)
 
@@ -111,6 +124,27 @@ start-proxy                            # cần ENABLE_PROXY=1
 proxychains4 curl -s https://httpbin.org/ip
 stop-proxy
 ```
+
+## Buff hệ điều hành
+
+Lần đầu mở trang, wizard hỏi chọn profile (mở lại bất cứ lúc nào bằng nút **Buff HDH**):
+
+| Profile | Nội dung |
+|---------|----------|
+| **Bỏ qua** | Giữ mặc định LXQt siêu nhẹ — đẹp — ổn định (khuyến nghị RAM nhỏ) |
+| **Lite Siêu Nhẹ** | Dọn sâu sau cài + tinh chỉnh hiệu năng, không tải thêm gì |
+| **Developer Đầy Đủ** | gcc/cmake, jq, ripgrep, fzf, tmux, sqlite3, strace, python venv... |
+| **Media & Design** | Inkscape, Krita, Audacity, mpv, HandBrake |
+| **Driver & Phần Cứng** | FUSE + gvfs, NTFS/exFAT, USB/PCI tools, SMART, lm-sensors |
+| **BUFF TẤT CẢ** | dev + media + drivers một lượt (~500MB+) |
+
+Tiến độ hiển thị realtime trong web Terminal. Chạy tay được: `os-profile dev`.
+
+## AI CLI
+
+- Web UI: nút **AI CLI** → mô tả việc cần làm → AI trả lời + đưa ra lệnh. Bật "Tự chạy lệnh" để AI tự thực thi.
+- Terminal desktop: `ai "cai dat vlc va mo luon"` (xem lệnh) hoặc `ai --run "..."` (chạy luôn).
+- **An toàn**: mọi lệnh đi qua bộ lọc — chặn `rm -rf` trên thư mục hệ thống/home, `mkfs`/`fdisk`/`dd` ghi đĩa, fork bomb, shutdown/reboot, `supervisorctl stop/shutdown`, kill service nền, sửa `/etc/shadow|sudoers`, gỡ VNC/desktop packages... Lệnh bị chặn hiện lý do rõ ràng.
 
 ## System Optimizer
 

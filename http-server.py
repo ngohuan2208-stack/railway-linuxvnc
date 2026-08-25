@@ -30,6 +30,16 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# AI CLI helpers live in /usr/local/bin (copied from scripts/ by Docker).
+sys.path.insert(0, "/usr/local/bin")
+try:
+    import ai_chat
+    import ai_safety
+except Exception as _ai_err:  # pragma: no cover
+    ai_chat = None
+    ai_safety = None
+    log.warning("AI CLI module unavailable: %s", type(_ai_err).__name__)
+
 VNC_HOST = "127.0.0.1"
 VNC_PORT = 5901
 CODE_HOST = "127.0.0.1"
@@ -214,6 +224,8 @@ def check_components():
         # idle-monitor stopped the session on purpose; not a crash
         desktop_state = "suspended"
 
+    ai_state = "ready" if _ai_ready() else "stopped"
+
     return {
         "http": {"state": "ready"},
         "vnc": {"state": vnc_state, "port": VNC_PORT},
@@ -221,6 +233,7 @@ def check_components():
         "websocket": {"state": ws_state},
         "code_server": {"state": code_state, "port": CODE_PORT,
                         "lazy": True},
+        "ai_cli": {"state": ai_state, "lazy": True},
     }
 
 
@@ -877,6 +890,327 @@ async def optimize_stream(request):
     return resp
 
 
+# ---------------------------------------------------------------- tasks
+# Generic terminal-task runner (install VS Code, OS profile "buff", ...).
+# One job at a time; output is streamed to subscribers over SSE and
+# buffered so late viewers see the history.
+
+TERMINAL_TASKS = {
+    "vscode": {
+        "title": "Cai Visual Studio Code (PC)",
+        "argv": ["/usr/local/bin/install-vscode"],
+    },
+}
+
+OS_PROFILES = {
+    "lite": {
+        "title": "OS Lite Sieu Nhe",
+        "desc": "Giu LXQt mac dinh (nhe - dep - on dinh), don dep + "
+                "tinh chinh hieu nang. Khong tai them gi.",
+    },
+    "dev": {
+        "title": "Developer Day Du",
+        "desc": "gcc/cmake, jq, ripgrep, fzf, tmux, sqlite3, strace, "
+                "python venv/pip, dnsutils... cho lap trinh vien.",
+    },
+    "media": {
+        "title": "Media & Design",
+        "desc": "Inkscape, Krita, Audacity, mpv, HandBrake - chup anh, "
+                "nghe nhac, convert video.",
+    },
+    "drivers": {
+        "title": "Driver & Phan Cung",
+        "desc": "FUSE + gvfs, NTFS/exFAT, USB/PCI tools, SMART, lm-sensors, "
+                "CIFS/NFS client.",
+    },
+    "ultra": {
+        "title": "BUFF TAT CA",
+        "desc": "dev + media + drivers trong mot luot. Tai nhieu nhat "
+                "(~500MB+), chay lau hon.",
+    },
+}
+
+
+class TaskJob:
+    def __init__(self):
+        self.lock = asyncio.Lock()
+        self.running = False
+        self.name = ""
+        self.title = ""
+        self.started_at = 0
+        self.buffered = []
+        self.subscribers = set()
+        self.result = None
+
+    async def start(self, name, title, argv):
+        async with self.lock:
+            if self.running:
+                return False, f"'{self.name}' dang chay"
+            self.running = True
+            self.name = name
+            self.title = title
+            self.started_at = time.time()
+            self.buffered.clear()
+            self.result = None
+            try:
+                self.proc = await asyncio.create_subprocess_exec(
+                    *argv,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                    env={**os.environ},
+                )
+            except Exception as e:
+                self.running = False
+                log.error("task %s spawn failed: %s", name, e)
+                return False, "spawn failed"
+            asyncio.create_task(self._pump())
+            return True, "started"
+
+    async def broadcast(self, line):
+        entry = {"ts": int(time.time()), "line": line}
+        self.buffered.append(entry)
+        if len(self.buffered) > 800:
+            del self.buffered[:200]
+        for q in list(self.subscribers):
+            try:
+                q.put_nowait(entry)
+            except Exception:
+                self.subscribers.discard(q)
+
+    async def finish(self, returncode):
+        self.running = False
+        self.returncode = returncode
+        await self.broadcast(f"[TASK] '{self.name}' exited rc={returncode}")
+
+    async def _pump(self):
+        assert self.proc and self.proc.stdout
+        deadline = time.time() + 3600  # hard cap 1 hour (ultra profile)
+        try:
+            while True:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    self.proc.kill()
+                    await self.broadcast("[TASK] timeout, killed")
+                    break
+                try:
+                    raw = await asyncio.wait_for(
+                        self.proc.stdout.readline(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    continue
+                if not raw:
+                    break
+                line = raw.decode("utf-8", errors="replace").rstrip()
+                if line.startswith("TASK_RESULT_JSON:"):
+                    try:
+                        self.result = json.loads(line.split(":", 1)[1])
+                    except Exception:
+                        self.result = None
+                    continue
+                await self.broadcast(line)
+        except Exception as e:
+            await self.broadcast(f"[TASK] pump error {type(e).__name__}")
+        rc = await self.proc.wait()
+        await self.finish(rc)
+
+
+task_job = TaskJob()
+
+
+async def tasks_status(request):
+    return web.json_response({
+        "running": task_job.running,
+        "name": task_job.name,
+        "title": task_job.title,
+        "result": task_job.result,
+        "returncode": getattr(task_job, "returncode", None),
+    })
+
+
+async def tasks_run(request):
+    task = request.match_info.get("task", "")
+    if task == "os":
+        profile = request.query.get("profile", "lite")
+        meta = OS_PROFILES.get(profile)
+        if not meta:
+            return web.json_response(
+                {"status": "error", "msg": "unknown profile"}, status=404)
+        argv = ["/usr/local/bin/os-profile", profile]
+        title = meta["title"]
+        name = f"os:{profile}"
+    elif task in TERMINAL_TASKS:
+        meta = TERMINAL_TASKS[task]
+        argv = list(meta["argv"])
+        title = meta["title"]
+        name = task
+    else:
+        return web.json_response({"status": "error",
+                                  "msg": "unknown task"}, status=404)
+
+    ok, msg = await task_job.start(name, title, argv)
+    if not ok:
+        return web.json_response({"status": msg}, status=409)
+    log.info("task started: %s", name)
+    return web.json_response({"status": "started", "task": name})
+
+
+async def tasks_stream(request):
+    resp = web.StreamResponse(status=200, headers={
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    })
+    await resp.prepare(request)
+
+    queue: asyncio.Queue = asyncio.Queue()
+    for entry in task_job.buffered[-300:]:
+        await queue.put(entry)
+    task_job.subscribers.add(queue)
+
+    try:
+        await resp.write(b": connected\n\n")
+        while True:
+            try:
+                entry = await asyncio.wait_for(queue.get(), timeout=15)
+                payload = json.dumps(entry)
+                await resp.write(f"data: {payload}\n\n".encode())
+                if "[TASK] '" in entry["line"] and "exited" in entry["line"]:
+                    await resp.write(b"data: __END__\n\n")
+                    break
+            except asyncio.TimeoutError:
+                if not task_job.running and task_job.buffered:
+                    # job finished while we were subscribed -> end cleanly
+                    last = task_job.buffered[-1]["line"]
+                    if "[TASK] '" in last and "exited" in last:
+                        await resp.write(b"data: __END__\n\n")
+                        break
+                await resp.write(b": keepalive\n\n")
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    finally:
+        task_job.subscribers.discard(queue)
+    return resp
+
+
+async def os_profiles(request):
+    profiles = []
+    for key, meta in OS_PROFILES.items():
+        done_marker = os.path.join("/home/user/.config/os-profiles",
+                                   key + ".done")
+        profiles.append({"id": key, "title": meta["title"],
+                         "desc": meta["desc"],
+                         "applied": os.path.exists(done_marker)})
+    return web.json_response({"profiles": profiles})
+
+
+# ---------------------------------------------------------------- AI CLI
+
+def _ai_ready():
+    return ai_chat is not None and ai_safety is not None and \
+        ai_chat.enabled()
+
+
+async def ai_status(request):
+    if ai_chat is None:
+        return web.json_response({"enabled": False})
+    cfg = ai_chat.load_config()
+    return web.json_response({
+        "enabled": ai_chat.enabled(cfg),
+        "name": cfg.get("name"),
+        "model": cfg.get("model"),
+        "provider": cfg.get("provider") or "openai",
+    })
+
+
+async def ai_chat_handler(request):
+    if not _ai_ready():
+        return web.json_response({"status": "disabled"}, status=503)
+    try:
+        body = await request.json()
+        prompt = str(body.get("prompt", "")).strip()
+    except Exception:
+        return web.json_response({"status": "error",
+                                  "msg": "bad request"}, status=400)
+    if not prompt:
+        return web.json_response({"status": "error",
+                                  "msg": "empty prompt"}, status=400)
+    if len(prompt) > 8000:
+        return web.json_response({"status": "error",
+                                  "msg": "prompt qua dai (max 8000)"},
+                                 status=413)
+
+    cfg = ai_chat.load_config()
+    loop = asyncio.get_event_loop()
+    try:
+        reply = await loop.run_in_executor(
+            None, lambda: ai_chat.chat(cfg, prompt, timeout=120))
+    except Exception as e:
+        log.warning("AI chat error: %s", type(e).__name__)
+        msg = str(e)[:300]
+        return web.json_response({"status": "error", "msg": msg}, status=502)
+
+    commands = []
+    for c in ai_chat.extract_commands(reply):
+        ok, why = ai_safety.classify_command(c)
+        commands.append({"cmd": c, "ok": ok, "reason": "" if ok else why})
+    return web.json_response({"status": "ok", "reply": reply,
+                              "commands": commands})
+
+
+MAX_EXEC_OUTPUT = 256 * 1024
+
+
+async def ai_exec(request):
+    """Run ONE command proposed by the AI - only after passing the
+    safety filter (blocks rm -rf /, mkfs, dd to /dev/*, shutdown,
+    killing platform services, tampering with /etc/supervisor...)."""
+    if not _ai_ready():
+        return web.json_response({"status": "disabled"}, status=503)
+    try:
+        body = await request.json()
+        cmd = str(body.get("command", "")).strip()
+    except Exception:
+        return web.json_response({"status": "error",
+                                  "msg": "bad request"}, status=400)
+    if not cmd:
+        return web.json_response({"denied": True, "reason": "lenh rong"},
+                                 status=400)
+
+    ok, reason = ai_safety.classify_command(cmd)
+    if not ok:
+        log.info("AI exec DENIED (%s): %.80s", reason, cmd)
+        return web.json_response({"denied": True, "reason": reason})
+
+    try:
+        timeout = int(os.environ.get("AI_EXEC_TIMEOUT", "240"))
+    except ValueError:
+        timeout = 240
+
+    started = time.time()
+    proc = await asyncio.create_subprocess_exec(
+        "bash", "-lc", cmd,
+        cwd="/home/user",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        env={**os.environ, "DISPLAY": ":1"},
+    )
+    timed_out = False
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        timed_out = True
+        proc.kill()
+        out = b"(timeout - lenh bi huy sau %d giay)\n" % timeout
+
+    output = out[-MAX_EXEC_OUTPUT:].decode("utf-8", errors="replace")
+    return web.json_response({
+        "denied": False,
+        "rc": 124 if timed_out else proc.returncode,
+        "output": output,
+        "duration_s": int(time.time() - started),
+    })
+
+
 # ---------------------------------------------------------------- wallpaper
 
 def _run_as_user_bg(cmd):
@@ -1112,6 +1446,13 @@ app.router.add_get("/api/wallpaper/list", wallpaper_list)
 app.router.add_post("/api/wallpaper/preset", wallpaper_preset)
 app.router.add_post("/api/wallpaper/upload", wallpaper_upload)
 app.router.add_post("/api/system/{action}", system_power)
+app.router.add_get("/api/tasks/status", tasks_status)
+app.router.add_post("/api/tasks/run/{task}", tasks_run)
+app.router.add_get("/api/tasks/stream", tasks_stream)
+app.router.add_get("/api/os/profiles", os_profiles)
+app.router.add_get("/api/ai/status", ai_status)
+app.router.add_post("/api/ai/chat", ai_chat_handler)
+app.router.add_post("/api/ai/exec", ai_exec)
 app.router.add_route("*", "/code", code_proxy)
 app.router.add_route("*", "/code/{path:.*}", code_proxy)
 app.router.add_get("/novnc/{path:.*}", handle_novnc)

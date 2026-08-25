@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""ai - AI CLI tren desktop (doc config tu Railway env hoac ~/.ai-cli).
+
+Ví dụ trong terminal desktop:
+  ai "cai dat htop va mo luon"
+  ai --run "kiem tra disk usage va don dep cache"
+"""
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import ai_chat  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(ai_chat.main())
