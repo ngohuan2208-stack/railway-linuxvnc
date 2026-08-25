@@ -248,7 +248,7 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
       Services
     </div>
     <div class="svc-row"><span class="svc-name">VNC (Xvnc)</span><span class="svc-chip starting" id="svc-vnc">STARTING</span></div>
-    <div class="svc-row"><span class="svc-name">XFCE Desktop</span><span class="svc-chip starting" id="svc-desktop">STARTING</span></div>
+    <div class="svc-row"><span class="svc-name">Desktop Session</span><span class="svc-chip starting" id="svc-desktop">STARTING</span></div>
     <div class="svc-row"><span class="svc-name">WebSocket</span><span class="svc-chip starting" id="svc-websocket">STARTING</span></div>
     <div class="svc-row"><span class="svc-name">HTTP Server</span><span class="svc-chip starting" id="svc-http">STARTING</span></div>
     <div class="svc-row"><span class="svc-name">Code Server</span><span class="svc-chip starting" id="svc-code_server">STOPPED</span></div>
@@ -344,7 +344,9 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
 
       <div class="g-page active" id="pg-start">
         <h3>Su dung Desktop</h3>
-        <p>Desktop XFCE chay trong khung noVNC ben phai. Di chuot, ban phim hoat dong nhu PC that. Thanh dock o duoi chua menu ung dung va cac launcher.</p>
+        <p>Desktop Linux (LXQt hoac XFCE - chon bang bien DESKTOP) chay trong khung noVNC ben phai. Di chuot, ban phim hoat dong nhu PC that.</p>
+        <h3>Dung nhieu thiet bi cung luc</h3>
+        <p>Mo domain tren bat ky may nao (PC, laptop, dien thoai) - tat cung thay mot desktop va cung dieu khien duoc, giong chia se man hinh. Khong gioi han so thiet bi.</p>
         <h3>Mo Terminal</h3>
         <p>Cach 1: nut Terminal o sidebar. Cach 2: menu Applications > Terminal Emulator.</p>
         <div class="code-block"><code>xfce4-terminal</code><button class="copy-btn">Copy</button></div>
@@ -436,7 +438,7 @@ optimize-system --dry-run   # xem truoc se xoa gi</code><button class="copy-btn"
         <h3>Connecting... / Failed to connect</h3>
         <p>1. Container moi boot: cho 15-30 giay, trang thai se tu chuyen sang Connected.<br>2. Bam nut Reconnect o sidebar hoac tren man hinh loi.<br>3. Kiem tra /health neu van loi lau hon 2 phut.<br>4. Cuoi cung: Railway > Deployments > Restart.</p>
         <h3>Desktop den / khong hien</h3>
-        <p>Xem Logs > xfce. Watchdog tu khoi dong lai XFCE trong vong 30 giay. Neu treo lau: bam Reconnect.</p>
+        <p>Xem Logs > xfce. Watchdog tu khoi dong lai desktop trong vong 30 giay. Neu treo lau: bam Reconnect. Doi DE bang bien DESKTOP=xfce hoac DESKTOP=lxqt + redeploy.</p>
         <h3>Browser khong chay video</h3>
         <div class="code-block"><code>chromium --no-sandbox https://youtube.com</code><button class="copy-btn">Copy</button></div>
         <p>Codecs da cai san. Neu Van loi, thu Firefox ESR.</p>
@@ -453,6 +455,7 @@ optimize-system --dry-run   # xem truoc se xoa gi</code><button class="copy-btn"
         <p>Service > Volumes > Mount path: /home. Kich thuoc tuy chon (1GB+).</p>
         <h3>Variables</h3>
         <div class="code-block"><code>PORT=8080              # tu dong boi Railway
+DESKTOP=lxqt           # lxqt (nhe, mac dinh) | xfce
 RESOLUTION=1600x900
 VNC_DEPTH=24
 VNC_FPS=30

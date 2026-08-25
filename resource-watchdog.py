@@ -209,12 +209,18 @@ def proc_alive(name):
     return False
 
 
+def desktop_session_proc():
+    """Process name of the running desktop session (DESKTOP env)."""
+    return {"xfce": "xfce4-session", "lxqt": "lxqt-session"}.get(
+        os.environ.get("DESKTOP", "lxqt"), "lxqt-session")
+
+
 SERVICES = [
     # key, supervisor name, healthy check, log tag
     {"key": "vnc", "supervisor": "xvnc",
      "check": lambda: listening(5901), "tag": "VNC"},
     {"key": "desktop", "supervisor": "desktop",
-     "check": lambda: proc_alive("xfce4-session"), "tag": "XFCE"},
+     "check": lambda: proc_alive(desktop_session_proc()), "tag": "DESKTOP"},
     {"key": "httpserver", "supervisor": "httpserver",
      "check": lambda: listening(int(os.environ.get("PORT", "8080"))),
      "tag": "HTTP"},

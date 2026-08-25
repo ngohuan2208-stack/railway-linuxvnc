@@ -10,6 +10,7 @@ ARG INSTALL_VLC=1
 ARG INSTALL_TOR=1
 ARG INSTALL_NODE=1
 ARG INSTALL_CODESERVER=1
+ARG INSTALL_LXQT=1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
@@ -23,6 +24,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8 \
     MALLOC_ARENA_MAX=2 \
     CODE_SERVER_PORT=8443 \
+    DESKTOP=lxqt \
     IDLE_TIMEOUT=0 \
     BOOT_GRACE_SEC=240 \
     VNC_CONNECT_WINDOW=120 \
@@ -53,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     $( [ "$INSTALL_LIBREOFFICE" = "1" ] && echo libreoffice-writer libreoffice-calc libreoffice-impress ) \
     $( [ "$INSTALL_VLC" = "1" ] && echo vlc ) \
     $( [ "$INSTALL_TOR" = "1" ] && echo "tor privoxy proxychains4" ) \
+    $( [ "$INSTALL_LXQT" = "1" ] && echo "lxqt-core openbox pcmanfm-qt qterminal lxqt-themes qt5ct" ) \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* \
               /usr/share/doc/* /usr/share/man/* /tmp/*

@@ -28,6 +28,9 @@ CPU_MAX_PCT=${CPU_MAX_PCT:-85}
 DISK_CLEAN_PCT=${DISK_CLEAN_PCT:-80}
 WATCHDOG_INTERVAL=${WATCHDOG_INTERVAL:-5}
 BOOT_GRACE_SEC=${BOOT_GRACE_SEC:-240}
+# Desktop environment: lxqt (default, lighter) | xfce (classic, opt-in)
+DESKTOP=${DESKTOP:-lxqt}
+case "$DESKTOP" in xfce|lxqt) ;; *) DESKTOP=lxqt ;; esac
 
 case "$PORT" in ''|*[!0-9]*) PORT=8080 ;; esac
 [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ] && PORT=8080
@@ -41,6 +44,7 @@ case "$MEM_LIMIT_MB" in ''|*[!0-9]*) MEM_LIMIT_MB=1228 ;; esac
 export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
 export AUTO_BACKUP BACKUP_INTERVAL_MIN AUTO_BACKUP_ON_EXIT ENABLE_PROXY ENABLE_AUDIO
 export MEM_LIMIT_MB CPU_MAX_PCT DISK_CLEAN_PCT WATCHDOG_INTERVAL BOOT_GRACE_SEC
+export DESKTOP
 
 mkdir -p /var/log/supervisor /var/log
 touch /var/log/boot.log
@@ -73,7 +77,7 @@ fi
 mkdir -p /home/user/{Desktop,Documents,Downloads,Projects,.config,.cache,.vnc,.backups,Drive,.local/share/code-server,.wallpapers,.ssh}
 chmod 700 /home/user/.ssh 2>/dev/null || true
 
-blog "[BOOT] Environment OK"
+blog "[BOOT] Environment OK (DESKTOP=$DESKTOP)"
 blog "[BOOT] Storage OK (/home/user initialized)"
 
 # ---------------- VNC AUTH ----------------
@@ -132,7 +136,24 @@ RUNXVNC
 chmod +x /usr/local/bin/run-xvnc.sh
 chown -R user:user /home/user/.vnc
 
-# ---------------- XFCE PERFORMANCE ----------------
+# ---------------- DESKTOP SESSION LAUNCHER ----------------
+cat > /usr/local/bin/run-desktop.sh << RUNDESKTOP
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+export XDG_SESSION_DESKTOP=${DESKTOP}
+export DISPLAY=:1
+# keep the screen always on (24/7 visibility)
+xset s off -dpms 2>/dev/null || true
+if [ "${DESKTOP}" = "xfce" ]; then
+    exec dbus-launch --exit-with-session startxfce4
+else
+    exec dbus-launch --exit-with-session startlxqt
+fi
+RUNDESKTOP
+chmod +x /usr/local/bin/run-desktop.sh
+
+# ---------------- XFCE PERFORMANCE (only for DESKTOP=xfce) ----------------
 mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM4'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -148,6 +169,49 @@ cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM4'
   </property>
 </channel>
 XFWM4
+
+# ---------------- LXQT CONFIG (only for DESKTOP=lxqt) ----------------
+if [ "$DESKTOP" = "lxqt" ]; then
+    mkdir -p /home/user/.config/lxqt /home/user/.config/openbox
+    cat > /home/user/.config/lxqt/lxqt.conf << 'LXQT'
+[General]
+theme=dark
+icon_theme=Papirus-Dark
+style=fusion
+single_click_activate=false
+LXQT
+
+    cat > /home/user/.config/lxqt/session.conf << 'LXSESS'
+[General]
+__userfile__=true
+window_manager=openbox
+
+[Environment]
+GTK_CSD=0
+GTK_OVERLAY_SCROLLING=0
+LXSESS
+
+    # no screensaver / screen locking - desktop stays visible 24/7
+    mkdir -p /home/user/.config/autostart
+    for a in xscreensaver lxqt-xscreensaver-autostart; do
+        printf '[Desktop Entry]\nType=Application\nHidden=true\n' \
+            > "/home/user/.config/autostart/${a}.desktop"
+    done
+
+    # Arc-Dark window decorations, no compositor, no shadows
+    cat > /home/user/.config/openbox/lxqt-rc.xml << 'OBRC'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme>
+    <name>Arc-Dark</name>
+    <titleLayout>NLMIC</titleLayout>
+  </theme>
+  <placement>
+    <policy>Smart</policy>
+  </placement>
+</openbox_config>
+OBRC
+fi
 
 cat > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml << 'XFPM'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -420,19 +484,21 @@ port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
     blog "[VNC] Waiting for 5901... done"
     blog "[VNC] Ready"
 
-    # [XFCE] wait for session process
+    # [DE] wait for session process
+    SESSION_PROC=xfce4-session
+    [ "$DESKTOP" = "lxqt" ] && SESSION_PROC=lxqt-session
     XF_DEADLINE=$(( $(date +%s) + BOOT_GRACE_SEC ))
     while [ "$(date +%s)" -lt "$XF_DEADLINE" ]; do
-        if pgrep -x xfce4-session >/dev/null 2>&1; then
-            blog "[XFCE] Starting desktop... done"
-            blog "[XFCE] Ready"
+        if pgrep -x "$SESSION_PROC" >/dev/null 2>&1; then
+            blog "[${DESKTOP^^}] Starting desktop... done"
+            blog "[${DESKTOP^^}] Ready"
             blog "[WS] WebSocket bridge ready"
             blog "[SYSTEM] Desktop READY"
             exit 0
         fi
         sleep 1
     done
-    blog "[ERROR] XFCE did not start within ${BOOT_GRACE_SEC}s (watchdog will retry)"
+    blog "[ERROR] Desktop ($SESSION_PROC) did not start within ${BOOT_GRACE_SEC}s (watchdog will retry)"
 ) &
 
 wait "$SUP_PID"

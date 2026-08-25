@@ -127,6 +127,12 @@ def count_proc(name):
     return n
 
 
+def desktop_session_proc():
+    """Process name of the running desktop session (DESKTOP env)."""
+    return {"xfce": "xfce4-session", "lxqt": "lxqt-session"}.get(
+        os.environ.get("DESKTOP", "lxqt"), "lxqt-session")
+
+
 HOP_HEADERS = {
     "host", "connection", "upgrade", "keep-alive",
     "transfer-encoding", "content-encoding", "content-length",
@@ -176,7 +182,7 @@ def check_components():
     else:
         vnc_state = "starting" if boot_grace else "failed"
 
-    xfce_procs = count_proc("xfce4-session")
+    xfce_procs = count_proc(desktop_session_proc())
     if xfce_procs > 0:
         desktop_state = "ready"
     else:

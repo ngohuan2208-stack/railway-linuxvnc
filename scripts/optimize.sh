@@ -206,10 +206,12 @@ check_one() {
         fail "$label NOT RUNNING"
     fi
 }
+SESSION_PROC=xfce4-session
+[ "${DESKTOP:-lxqt}" = "lxqt" ] && SESSION_PROC=lxqt-session
 check_one "Xvnc(5901) running" bash -c 'exec 3<>/dev/tcp/127.0.0.1/5901'
-pgrep -x xfce4-session >/dev/null && SERVICES_TOTAL=$((SERVICES_TOTAL+1)) \
-    && { SERVICES_OK=$((SERVICES_OK+1)); ok "XFCE session"; } \
-    || { SERVICES_TOTAL=$((SERVICES_TOTAL+1)); fail "XFCE session"; }
+pgrep -x "$SESSION_PROC" >/dev/null && SERVICES_TOTAL=$((SERVICES_TOTAL+1)) \
+    && { SERVICES_OK=$((SERVICES_OK+1)); ok "Desktop session ($SESSION_PROC)"; } \
+    || { SERVICES_TOTAL=$((SERVICES_TOTAL+1)); fail "Desktop session ($SESSION_PROC)"; }
 PORT_SVC="${PORT:-8080}"
 check_one "HTTP(${PORT_SVC}) running" bash -c "exec 3<>/dev/tcp/127.0.0.1/${PORT_SVC}"
 

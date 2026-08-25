@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-08-25 (2) — LXQt desktop + multi-device
+
+### Thêm mới
+
+1. **Đổi Desktop Environment — biến `DESKTOP`**
+   - `DESKTOP=lxqt` (**mặc định mới**, nhẹ hơn): LXQt + Openbox (Arc-Dark) + pcmanfm-qt. Đo thực tế trên cùng image: container **226MB** so với **350MB** của XFCE → **tiết kiệm ~124MB RAM**.
+   - `DESKTOP=xfce` — quay lại XFCE4 cổ điển với dock trong suốt như cũ (đã test compat OK).
+   - Fix kèm theo: LXQt không tự khởi động WM qua config mặc định → set `window_manager=openbox` đúng key trong `session.conf`; tắt xscreensaver autostart; `xset s off -dpms` trong session.
+   - Watchdog / health / optimizer nhận diện session process động theo `DESKTOP` (không còn hardcode `xfce4-session`).
+
+2. **Multi-device dùng đồng thời**
+   - Xác minh `-AlwaysShared`: nhiều thiết bị mở cùng domain thấy chung một desktop và cùng điều khiển (shared session kiểu TeamViewer). Test 2 kết nối RFB auth **đồng thời** qua WebSocket bridge → cả hai AUTH OK.
+   - Bridge aiohttp async nên số kết nối song song không giới hạn ở tầng app.
+
+3. Build args mới: `INSTALL_LXQT=1` (default) — build slim có thể đặt `0`.
+
 ## 2026-08-25 — Stability, 24/7, Watchdog, Optimizer, Guide, Logs
 
 ### Bug đã sửa

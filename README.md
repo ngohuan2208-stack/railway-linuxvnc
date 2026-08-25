@@ -4,14 +4,15 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 
 ## Tính năng chính
 
-- **XFCE4** + Dock trong suốt (Arc-Dark theme)
+- **Desktop Linux** — LXQt (mặc định, nhẹ) hoặc XFCE, chọn bằng biến `DESKTOP`
+- **Đa thiết bị cùng lúc** — mở domain trên PC/laptop/điện thoại: tất cả xem và điều khiển chung một desktop (shared session, không giới hạn số thiết bị)
 - **noVNC** + sidebar theo dõi CPU/RAM/Disk/Network/Uptime real-time
 - **24/7 mode** — desktop KHÔNG tự sleep/suspend khi idle
-- **Tự phục hồi** — watchdog tự restart Xvnc / XFCE / HTTP / code-server khi chết (có backoff, chống restart-loop)
-- **/health** — health check chi tiết từng component (VNC, XFCE, WebSocket, HTTP, Code Server)
+- **Tự phục hồi** — watchdog tự restart Xvnc / Desktop / HTTP / code-server khi chết (có backoff, chống restart-loop)
+- **/health** — health check chi tiết từng component (VNC, Desktop, WebSocket, HTTP, Code Server)
 - **System Optimizer** — dọn dẹp an toàn ngay trên web UI, có dry-run, xem log realtime
 - **Guide** — hướng dẫn sử dụng đầy đủ trong web UI (nút góc trái dưới)
-- **Logs viewer** — xem log hệ thống/VNC/XFCE/WebSocket/Optimizer trực tiếp
+- **Logs viewer** — xem log hệ thống/VNC/Desktop/WebSocket/Optimizer trực tiếp
 - **VS Code** (code-server) lazy-start, tự phục hồi
 - **Bàn phím ảo** Onboard
 - **YouTube** playback (Chromium + codecs)
@@ -46,6 +47,7 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 | Biến | Mặc định | Mô tả |
 |------|-----------|-------|
 | `PORT` | `8080` | Cổng web (Railway tự gán) |
+| `DESKTOP` | `lxqt` | Desktop environment: `lxqt` (nhẹ ~100MB ít RAM hơn) hoặc `xfce` |
 | `RESOLUTION` | `1600x900` | Độ phân giải desktop |
 | `VNC_DEPTH` | `24` | Bit màu (16 = ít RAM hơn) |
 | `VNC_FPS` | `30` | Giới hạn FPS của Xvnc (1–60) |
@@ -66,18 +68,20 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 
 ### Optional components (build-time)
 
-Image hỗ trợ build slim bằng `--build-arg` (mặc định = 1, giữ nguyên tính năng):
+Optional components (build args): `INSTALL_LXQT` (default 1), `INSTALL_GIMP`, `INSTALL_LIBREOFFICE`, `INSTALL_VLC`, `INSTALL_TOR`, `INSTALL_NODE`, `INSTALL_CODESERVER` — đặt `0` để build slim.
+
+## Đổi Desktop Environment
 
 ```bash
-docker build \
-  --build-arg INSTALL_GIMP=0 \
-  --build-arg INSTALL_LIBREOFFICE=0 \
-  --build-arg INSTALL_VLC=0 \
-  --build-arg INSTALL_TOR=0 \
-  --build-arg INSTALL_NODE=0 \
-  --build-arg INSTALL_CODESERVER=1 \
-  -t my-desktop .
+DESKTOP=lxqt   # mặc định - nhẹ, đẹp (Arc-Dark + Papirus + Openbox)
+DESKTOP=xfce   # XFCE4 cổ điển với dock trong suốt
 ```
+
+Đặt biến trên Railway → Variables → redeploy. Cả hai đều dùng chung apps (Firefox, Chromium, VS Code, VLC...).
+
+## Nhiều thiết bị cùng lúc
+
+Desktop chạy dạng **shared session**: mọi thiết bị mở cùng domain sẽ thấy cùng màn hình và cùng điều khiển (con trỏ di chuyển theo thiết bị đang thao tác). Không cần đăng nhập thêm, không giới hạn số kết nối đồng thời.
 
 ## FPS & Hiển thị
 
