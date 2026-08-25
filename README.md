@@ -57,6 +57,8 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 | `VNC_DEPTH` | `24` | Bit màu (16 = ít RAM hơn) |
 | `VNC_FPS` | `30` | Giới hạn FPS của Xvnc (1–60) |
 | `VNC_PASSWORD` | `railwaylinux` | Mật khẩu VNC (noVNC sẽ hỏi khi kết nối). Đặt `none` để tắt xác thực (VNC chỉ nghe localhost) |
+| `VNC_PUBLIC` | `0` | `1` = Xvnc nghe 0.0.0.0 — cho phép app VNC thật (RealVNC/TigerVNC/RVNC) kết nối qua TCP Proxy |
+| `VNC_TCP_PROXY` | _(trống)_ | Địa chỉ Railway TCP Proxy của port 5901 (vd `abc.proxy.rlwy.net:12345`) — hiện trong nút **VNC Client** |
 | `TZ` | _(trống)_ | Múi giờ, ví dụ `Asia/Ho_Chi_Minh` |
 | `IDLE_TIMEOUT` | `0` | **0 = 24/7 không sleep.** > 0 = giây idle trước khi suspend XFCE (tùy chọn cũ) |
 | `ENABLE_PROXY` | `0` | Bật Tor proxy (1=bật) |
@@ -124,6 +126,19 @@ start-proxy                            # cần ENABLE_PROXY=1
 proxychains4 curl -s https://httpbin.org/ip
 stop-proxy
 ```
+
+## Kết nối bằng app VNC thật (RealVNC / TigerVNC / RVNC)
+
+Nút **VNC Client (IP + Pass)** trên sidebar hiện địa chỉ + mật khẩu để dán vào app VNC — độ trễ thấp hơn noVNC, nhiều thiết bị cùng xem vẫn OK.
+
+Thiết lập một lần:
+
+1. Railway → Service → Settings → Networking → **+ TCP Proxy**, gắn với cổng nội bộ **5901**
+2. Copy địa chỉ proxy Railway cấp (vd `abc.proxy.rlwy.net:12345`)
+3. Thêm biến: `VNC_PUBLIC=1` và `VNC_TCP_PROXY=abc.proxy.rlwy.net:12345` → redeploy
+4. Mở nút **VNC Client** → copy địa chỉ + mật khẩu vào app
+
+⚠️ Khi `VNC_PUBLIC=1`, hãy luôn đặt `VNC_PASSWORD` mạnh — không bật public mà để trống mật khẩu.
 
 ## Buff hệ điều hành
 

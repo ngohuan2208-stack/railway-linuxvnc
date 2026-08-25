@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-08-25 (6) — VNC Client: ket noi bang app VNC that (IP + mat khau)
+
+### Thêm mới
+
+1. **Nút "VNC Client (IP + Pass)"** — modal hiện địa chỉ + mật khẩu để kết nối bằng app VNC thật (RealVNC Viewer, TigerVNC, RVNC...), độ trễ thấp hơn noVNC.
+   - API mới `/api/vnc/client`: trả `public_mode`, `tcp_proxy`, `address`, IP nội bộ container, port, mật khẩu (theo đúng chính sách `/api/session` — chỉ lộ khi là mật khẩu mặc định).
+   - Biến mới: **`VNC_PUBLIC=1`** → Xvnc bind `0.0.0.0:5901` (trước chỉ nghe localhost); **`VNC_TCP_PROXY=host:port`** → địa chỉ Railway TCP Proxy hiển thị sẵn để copy.
+   - Modal có hướng dẫn 4 bước tạo TCP Proxy trên Railway + nút Copy cho từng dòng; cảnh báo đỏ khi bật public mà không có mật khẩu.
+   - Fix thứ tự chuẩn hóa `VNC_PUBLIC` trong start.sh (normalize trước khi export cho process con).
+
 ## 2026-08-25 (5) — Hotfix: job failed, AI CLI, buff HDH
 
 ### Bug đã sửa

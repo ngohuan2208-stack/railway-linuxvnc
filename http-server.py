@@ -415,6 +415,54 @@ async def handle_session(request):
     })
 
 
+async def vnc_client_info(request):
+    """Info for connecting with a REAL VNC client (RealVNC/TigerVNC/RVNC).
+
+    - public_mode: Xvnc listens on 0.0.0.0 (needs VNC_PUBLIC=1)
+    - tcp_proxy:   the Railway TCP Proxy address, set via VNC_TCP_PROXY
+                   env after creating the proxy for port 5901
+    - ips:         container-internal IPs (usable only inside the same
+                   Railway network / not from a home PC)
+    Password follows the same policy as /api/session: only shown when it
+    is the well-known default.
+    """
+    import socket
+    pub = os.environ.get("VNC_PUBLIC", "0") == "1"
+    proxy = os.environ.get("VNC_TCP_PROXY", "").strip()
+
+    ips = []
+    try:
+        hn = socket.gethostbyname(socket.gethostname())
+        if hn and not hn.startswith("127.") and hn not in ips:
+            ips.append(hn)
+    except Exception:
+        pass
+    try:
+        for _iface, addrs in psutil.net_if_addrs().items():
+            for a in addrs:
+                if a.family == socket.AF_INET and \
+                        not a.address.startswith("127.") and \
+                        a.address not in ips:
+                    ips.append(a.address)
+    except Exception:
+        pass
+
+    pw = os.environ.get("VNC_PASSWORD", "")
+    defaulted = os.environ.get("VNC_PASSWORD_DEFAULTED", "") == "1"
+
+    addr = proxy if proxy else ""
+    return web.json_response({
+        "public_mode": pub,
+        "tcp_proxy": proxy,
+        "address": addr,
+        "ips": ips[:4],
+        "vnc_port": VNC_PORT,
+        "auth": bool(pw),
+        "password": pw if (pw and defaulted) else None,
+        "resolution": os.environ.get("RESOLUTION", ""),
+    })
+
+
 async def handle_services(request):
     components = check_components()
     label = {"ready": "READY", "starting": "STARTING",
@@ -1482,6 +1530,7 @@ app.router.add_get("/", handle_index)
 app.router.add_get("/health", handle_health)
 app.router.add_get("/api/stats", handle_stats)
 app.router.add_get("/api/session", handle_session)
+app.router.add_get("/api/vnc/client", vnc_client_info)
 app.router.add_get("/api/services", handle_services)
 app.router.add_post("/api/start/code-server", start_code_server)
 app.router.add_get("/api/start/code-server", start_code_server)

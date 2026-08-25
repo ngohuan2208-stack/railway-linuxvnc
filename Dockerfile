@@ -28,7 +28,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     IDLE_TIMEOUT=0 \
     BOOT_GRACE_SEC=240 \
     VNC_CONNECT_WINDOW=120 \
-    CODE_START_TIMEOUT=30
+    CODE_START_TIMEOUT=30 \
+    VNC_PUBLIC=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \

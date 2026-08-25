@@ -32,6 +32,10 @@ BOOT_GRACE_SEC=${BOOT_GRACE_SEC:-240}
 DESKTOP=${DESKTOP:-lxqt}
 case "$DESKTOP" in xfce|lxqt) ;; *) DESKTOP=lxqt ;; esac
 
+# Public VNC (app client qua Railway TCP Proxy): 0 = chi nghe localhost
+case "${VNC_PUBLIC:-0}" in 1|true|TRUE|yes) VNC_PUBLIC=1 ;; *) VNC_PUBLIC=0 ;; esac
+VNC_TCP_PROXY=${VNC_TCP_PROXY:-}
+
 case "$PORT" in ''|*[!0-9]*) PORT=8080 ;; esac
 [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ] && PORT=8080
 case "$RESOLUTION" in ''|*[!0-9x]*|*x*x*) RESOLUTION=1600x900 ;; esac
@@ -45,6 +49,7 @@ export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
 export AUTO_BACKUP BACKUP_INTERVAL_MIN AUTO_BACKUP_ON_EXIT ENABLE_PROXY ENABLE_AUDIO
 export MEM_LIMIT_MB CPU_MAX_PCT DISK_CLEAN_PCT WATCHDOG_INTERVAL BOOT_GRACE_SEC
 export DESKTOP
+export VNC_PUBLIC="${VNC_PUBLIC:-0}" VNC_TCP_PROXY="${VNC_TCP_PROXY:-}"
 
 mkdir -p /var/log/supervisor /var/log
 touch /var/log/boot.log
@@ -110,6 +115,9 @@ if [ "$VNC_PASSWORD" = "railwaylinux" ]; then
     VNC_PASSWORD_DEFAULTED=1
 fi
 export VNC_PASSWORD VNC_PASSWORD_DEFAULTED
+if [ "$VNC_PUBLIC" = "1" ]; then
+    blog "[VNC] public bind 0.0.0.0:5901 (TCP proxy: ${VNC_TCP_PROXY:-chua cau hinh})"
+fi
 
 write_once /home/user/.vnc/xstartup << 'XSTARTUP'
 #!/bin/sh
@@ -122,9 +130,19 @@ chmod +x /home/user/.vnc/xstartup
 
 # ---------------- XVNC RUNNER ----------------
 # Generated at boot so security flags depend on VNC_PASSWORD presence.
+# VNC_PUBLIC=1 -> Xvnc listen 0.0.0.0 (dung voi Railway TCP Proxy de ket
+# noi bang app VNC that: RealVNC / TigerVNC / RVNC viewer...).
 mkdir -p /tmp/.X11-unix
 chmod 1777 /tmp/.X11-unix
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1   # stale locks from previous run
+if [ "$VNC_PUBLIC" = "1" ]; then
+    if [ -z "$VNC_PASSWORD" ]; then
+        blog "[WARN] VNC_PUBLIC=1 ma khong co mat khau - AI NGUOI LA CUNG DIEU KHIEN DUOC DESKTOP!"
+    fi
+    XNC_BIND="-localhost no"
+else
+    XNC_BIND="-localhost yes"
+fi
 cat > /usr/local/bin/run-xvnc.sh << RUNXVNC
 #!/bin/sh
 SECARGS="-SecurityTypes None"
@@ -135,7 +153,7 @@ fi
 # -QualityLevel/-CompressionLevel/-MaxCutPending (they crash startup).
 exec Xvnc :1 \\
     -geometry ${RESOLUTION} -depth ${VNC_DEPTH} \\
-    -rfbport 5901 -localhost yes \\
+    -rfbport 5901 ${XNC_BIND} \\
     \$SECARGS \\
     -AlwaysShared \\
     -FrameRate ${VNC_FPS} -CompareFB 2 -ZlibLevel 6 \\

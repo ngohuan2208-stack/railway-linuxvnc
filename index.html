@@ -387,6 +387,12 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
         Restart DE
       </button>
     </div>
+    <div class="tool-row">
+      <button class="tool-btn" onclick="openVncClient()">
+        <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+        VNC Client (IP + Pass)
+      </button>
+    </div>
   </div>
 </div>
 
@@ -569,6 +575,10 @@ AI_MODEL=gpt-4o-mini
 AI_NAME=Claude         # ten hien thi (tu chon)
 AI_PROVIDER=openai     # openai | gemini (tu chon)</code><button class="copy-btn">Copy</button></div>
         <p>Sau khi dat bien, config duoc ghi vao ~/.ai-cli/config.json va lenh <b>ai</b> san sang trong terminal desktop.</p>
+        <h3>Ket noi bang app VNC (IP + mat khau)</h3>
+        <p>Nut VNC Client o sidebar hien dia chi + mat khau de dung app that (RealVNC Viewer, TigerVNC...). Lan dau can bat: Railway &gt; Settings &gt; Networking &gt; <b>+ TCP Proxy</b> gan cong <b>5901</b>, roi dat bien:</p>
+        <div class="code-block"><code>VNC_PUBLIC=1
+VNC_TCP_PROXY=abc.proxy.rlwy.net:12345   # dia chi proxy Railway dua ra</code><button class="copy-btn">Copy</button></div>
         <h3>Domain</h3>
         <p>Settings > Networking > Generate Domain. Web desktop chay ngay tai domain do.</p>
         <h3>Logs / Restart / Redeploy</h3>
@@ -784,6 +794,42 @@ AI_PROVIDER=openai                       # openai | gemini</code><button class="
           <button class="btn secondary" style="margin-left:auto" onclick="$('ai-log').innerHTML=''">Xoa</button>
         </div>
         <p id="ai-status-txt" style="font-size:10.5px;color:var(--dim);min-height:14px;margin-top:6px"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= VNC CLIENT (RVNC) ================= -->
+<div class="modal" id="modal-vncc">
+  <div class="modal-card">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM8 15c0-1.33 2.67-2 4-2s4 .67 4 2v1H8v-1zm4-3c1.11 0 2-.89 2-2s-.89-2-2-2-2 .89-2 2 .89 2 2 2z"/></svg>
+      Ket noi bang app VNC
+      <button class="modal-close" onclick="closeModal('modal-vncc')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:#cbd5e1">Mo app VNC tren may/dien thoai (RealVNC Viewer, TigerVNC, RVNC...) va nhap dia chi + mat khau ben duoi.</p>
+      <div class="stat-row" style="margin:10px 0">
+        <span class="stat-label">Che do</span>
+        <span class="svc-chip starting" id="vncc-mode">...</span>
+      </div>
+      <h3 style="font-size:12px;color:var(--accent);margin:10px 0 4px">DIA CHI (IP / Host:Port)</h3>
+      <div class="code-block"><code id="vncc-addr">...</code><button class="copy-btn">Copy</button></div>
+      <h3 style="font-size:12px;color:var(--accent);margin:10px 0 4px">MAT KHAU</h3>
+      <div class="code-block"><code id="vncc-pw">...</code><button class="copy-btn">Copy</button></div>
+      <p id="vncc-note" style="font-size:10.5px;color:var(--dim);margin-top:6px"></p>
+      <div id="vncc-setup">
+        <h3 style="font-size:12px;color:var(--amber);margin:14px 0 4px">BAT KET NOI CONG KHAI (lam 1 lan)</h3>
+        <p style="font-size:11px;color:#cbd5e1">Railway khong mo port TCP truc tiep - can tao TCP Proxy:</p>
+        <p style="font-size:11px;color:#cbd5e1"><b>1.</b> Railway &gt; Service &gt; Settings &gt; Networking &gt; <b>+ TCP Proxy</b>, gan voi cong noi bo <b>5901</b>.</p>
+        <p style="font-size:11px;color:#cbd5e1"><b>2.</b> Copy dia chi proxy Railway dua ra (vd <code style="color:#93c5fd">abc.proxy.rlwy.net:12345</code>).</p>
+        <p style="font-size:11px;color:#cbd5e1"><b>3.</b> Them 2 bien roi redeploy:</p>
+        <div class="code-block"><code>VNC_PUBLIC=1
+VNC_TCP_PROXY=abc.proxy.rlwy.net:12345</code><button class="copy-btn">Copy</button></div>
+        <p style="font-size:11px;color:#cbd5e1"><b>4.</b> Mo lai cua so nay - dia chi se hien san de copy vao app VNC.</p>
+      </div>
+      <div class="note" id="vncc-ipbox" style="display:none">
+        IP noi bo container (chi dung trong cung mang Railway, khong ket noi tu nha duoc): <span id="vncc-ips"></span>
       </div>
     </div>
   </div>
@@ -1122,7 +1168,8 @@ function closeModal(id){$(id).className=$(id).className.replace(/ open/g,'')}
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     closeModal('modal-guide');closeModal('modal-optimizer');closeModal('modal-logs');closeModal('modal-wallpaper');
-    closeModal('modal-wizard');closeModal('modal-term');closeModal('modal-ai');
+    if($('modal-wizard').className.indexOf('open')>=0){closeModal('modal-wizard');wizRemember(getCookie(WIZ_KEY)||'skip')}
+    closeModal('modal-term');closeModal('modal-ai');closeModal('modal-vncc');
     if($('modal-pass').className.indexOf('open')>=0){closeModal('modal-pass');if(!vncStarted)setFrameFromPreset()}
     termDisconnect();
     optStopStream();
@@ -1133,6 +1180,7 @@ qsa('.modal').forEach(function(m){
     if(e.target===m){
       m.className=m.className.replace(/ open/g,'');
       if(m.id==='modal-pass'&&!vncStarted)setFrameFromPreset();
+      if(m.id==='modal-wizard')wizRemember(getCookie(WIZ_KEY)||'skip');
     }
   });
 });
@@ -1449,15 +1497,41 @@ function restartDesktopOnly(){
   });
 }
 
-/* ================= OS WIZARD (buff he dieu hanh) ================= */
+/* ================= OS WIZARD (buff he dieu hanh) =================
+   Tu mo DUNG MOT LAN. Neu trinh duyet chan localStorage (TV cu,
+   che do an danh...) thi dung cookie fallback; neu ca hai bi chan
+   KHONG tu mo nua - tranh vong lap "bang chon hien mai mai".       */
 var WIZ_KEY='rd_os_wizard_v1';
+function setCookie(k,v){
+  try{document.cookie=k+'='+encodeURIComponent(v)+';max-age=31536000;path=/'}catch(e){}
+}
+function getCookie(k){
+  try{
+    var m=document.cookie.match(new RegExp('(?:^|; )'+k+'=([^;]*)'));
+    return m?decodeURIComponent(m[1]):null;
+  }catch(e){return null}
+}
+var storeOK=false;
+(function(){
+  try{
+    localStorage.setItem('rd_probe','1');
+    localStorage.removeItem('rd_probe');
+    storeOK=true;
+  }catch(e){}
+})();
+function wizIsDone(){
+  return !!getCookie(WIZ_KEY)||(storeOK&&!!localStorage.getItem(WIZ_KEY));
+}
+function wizRemember(v){
+  var val=v||'done';
+  setCookie(WIZ_KEY,val);
+  if(storeOK){try{localStorage.setItem(WIZ_KEY,val)}catch(e){}}
+}
 function openWizard(){openModal('modal-wizard')}
-function wizClose(){closeModal('modal-wizard')}
-function wizRemember(v){try{localStorage.setItem(WIZ_KEY,v)}catch(e){}}
+function wizClose(){wizRemember(getCookie(WIZ_KEY)||'skip');closeModal('modal-wizard')}
 function wizFirstRun(){
-  var done=false;
-  try{done=!!localStorage.getItem(WIZ_KEY)}catch(e){}
-  if(!done)setTimeout(openWizard,800);
+  if(wizIsDone())return;
+  setTimeout(openWizard,1200);
 }
 function wizSkip(){
   wizRemember('skip');
@@ -1655,6 +1729,46 @@ function runAiCmds(cmds){
   try{a.checked=localStorage.getItem('rd_ai_auto')==='1'}catch(e){}
   a.onchange=function(){try{localStorage.setItem('rd_ai_auto',a.checked?'1':'0')}catch(e){}};
 })();
+
+/* ================= VNC CLIENT (app VNC that: RealVNC/RVNC...) ===== */
+function openVncClient(){
+  openModal('modal-vncc');
+  $('vncc-mode').textContent='...';
+  reqJSON('GET','/api/vnc/client',null,function(err,j){
+    if(err||!j){$('vncc-mode').textContent='LOI';return}
+    var mode=$('vncc-mode'),addr=$('vncc-addr'),pw=$('vncc-pw'),note=$('vncc-note');
+    if(j.public_mode&&j.tcp_proxy){
+      mode.textContent='SAN SANG';
+      mode.className='svc-chip ready';
+      addr.textContent=j.tcp_proxy;
+    }else if(j.public_mode){
+      mode.textContent='PUBLIC - CHUA CO PROXY';
+      mode.className='svc-chip warning';
+      addr.textContent='(lam buoc 1-3 ben duoi de lay dia chi cong khai)';
+    }else{
+      mode.textContent='NOI BO (chua bat)';
+      mode.className='svc-chip failed';
+      addr.textContent='(chua bat ket noi cong khai - xem huong dan ben duoi)';
+    }
+    if(!j.auth){
+      pw.textContent='(khong co mat khau - VNC_PASSWORD=none)';
+    }else if(j.password){
+      pw.textContent=j.password;
+    }else{
+      pw.textContent='(mat khau custom - nhap VNC_PASSWORD ban dat tren Railway)';
+    }
+    /* huong dan setup chi hien khi chua san sang */
+    $('vncc-setup').style.display=(j.public_mode&&j.tcp_proxy)?'none':'block';
+    /* IP noi bo: luon hien de tham khao */
+    if(j.ips&&j.ips.length){
+      $('vncc-ipbox').style.display='block';
+      $('vncc-ips').textContent=j.ips.join(', ')+':'+j.vnc_port;
+    }else{
+      $('vncc-ipbox').style.display='none';
+    }
+    note.textContent='App VNC noi thang qua RFB - khong qua trinh duyet, do tre thap hon noVNC. Nhieu client cung luc van OK (shared session).';
+  });
+}
 
 /* init */
 $('img-quality').value=curImgKey();
