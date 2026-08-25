@@ -79,7 +79,10 @@ RUN mkdir -p /home/user/{Desktop,Documents,Downloads,Projects,.config,.cache,.vn
 COPY scripts/ /usr/local/bin/
 RUN chmod +x /usr/local/bin/* \
     && cp /usr/local/bin/optimize.sh /usr/local/bin/optimize-system \
-    && chmod +x /usr/local/bin/optimize-system
+    && cp /usr/local/bin/os-profile.sh /usr/local/bin/os-profile \
+    && cp /usr/local/bin/install-vscode.sh /usr/local/bin/install-vscode \
+    && chmod +x /usr/local/bin/optimize-system /usr/local/bin/os-profile \
+                 /usr/local/bin/install-vscode
 
 COPY http-server.py /usr/local/bin/http-server.py
 COPY idle-monitor.py /usr/local/bin/idle-monitor.py

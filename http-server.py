@@ -902,6 +902,19 @@ TERMINAL_TASKS = {
     },
 }
 
+# Resolve real script paths: Docker copies scripts/ keeping the .sh suffix,
+# but also creates friendly aliases (install-vscode, os-profile) in the
+# Dockerfile - accept either so a rebuild is never needed for this.
+def _script_path(name):
+    for cand in (f"/usr/local/bin/{name}", f"/usr/local/bin/{name}.sh"):
+        if os.path.exists(cand):
+            return cand
+    return f"/usr/local/bin/{name}"
+
+
+for _t in TERMINAL_TASKS.values():
+    _t["argv"] = [_script_path(os.path.basename(_t["argv"][0]))]
+
 OS_PROFILES = {
     "lite": {
         "title": "OS Lite Sieu Nhe",
@@ -1034,7 +1047,7 @@ async def tasks_run(request):
         if not meta:
             return web.json_response(
                 {"status": "error", "msg": "unknown profile"}, status=404)
-        argv = ["/usr/local/bin/os-profile", profile]
+        argv = [_script_path("os-profile"), profile]
         title = meta["title"]
         name = f"os:{profile}"
     elif task in TERMINAL_TASKS:
@@ -1046,10 +1059,16 @@ async def tasks_run(request):
         return web.json_response({"status": "error",
                                   "msg": "unknown task"}, status=404)
 
+    if not os.path.exists(argv[0]):
+        log.error("task %s: script missing: %s", name, argv[0])
+        return web.json_response(
+            {"status": "error", "msg": f"script khong ton tai: {argv[0]}"},
+            status=500)
+
     ok, msg = await task_job.start(name, title, argv)
     if not ok:
         return web.json_response({"status": msg}, status=409)
-    log.info("task started: %s", name)
+    log.info("task started: %s (%s)", name, " ".join(argv))
     return web.json_response({"status": "started", "task": name})
 
 
@@ -1140,10 +1159,9 @@ async def ai_chat_handler(request):
                                  status=413)
 
     cfg = ai_chat.load_config()
-    loop = asyncio.get_event_loop()
     try:
-        reply = await loop.run_in_executor(
-            None, lambda: ai_chat.chat(cfg, prompt, timeout=120))
+        reply = await asyncio.to_thread(
+            ai_chat.chat, cfg, prompt, 120)
     except Exception as e:
         log.warning("AI chat error: %s", type(e).__name__)
         msg = str(e)[:300]
@@ -1163,7 +1181,12 @@ MAX_EXEC_OUTPUT = 256 * 1024
 async def ai_exec(request):
     """Run ONE command proposed by the AI - only after passing the
     safety filter (blocks rm -rf /, mkfs, dd to /dev/*, shutdown,
-    killing platform services, tampering with /etc/supervisor...)."""
+    killing platform services, tampering with /etc/supervisor...).
+
+    Commands run as the desktop user ('user') - not root - so files
+    created in /home/user keep correct ownership; the user has
+    passwordless sudo for anything that genuinely needs root.
+    """
     if not _ai_ready():
         return web.json_response({"status": "disabled"}, status=503)
     try:
@@ -1186,20 +1209,47 @@ async def ai_exec(request):
     except ValueError:
         timeout = 240
 
+    import signal
+    import pwd
+
+    def _demote():
+        pw = pwd.getpwnam("user")
+        os.setgroups([])
+        os.setgid(pw.pw_gid)
+        os.setuid(pw.pw_uid)
+
     started = time.time()
+    # Correct HOME/USER must be in env BEFORE bash -l reads the profile,
+    # otherwise the login shell picks up root's HOME (/root) and errors.
+    # 'cd /home/user' guards against odd profiles that change directory.
+    child_env = {**os.environ}
+    child_env.update({
+        "DISPLAY": ":1",
+        "HOME": "/home/user",
+        "USER": "user",
+        "LOGNAME": "user",
+    })
     proc = await asyncio.create_subprocess_exec(
-        "bash", "-lc", cmd,
+        "bash", "-lc", "cd /home/user 2>/dev/null; " + cmd,
         cwd="/home/user",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        env={**os.environ, "DISPLAY": ":1"},
+        env=child_env,
+        preexec_fn=_demote,
+        start_new_session=True,
     )
     timed_out = False
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
         timed_out = True
-        proc.kill()
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
         out = b"(timeout - lenh bi huy sau %d giay)\n" % timeout
 
     output = out[-MAX_EXEC_OUTPUT:].decode("utf-8", errors="replace")

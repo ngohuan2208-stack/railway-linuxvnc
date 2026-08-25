@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## 2026-08-25 (5) — Hotfix: job failed, AI CLI, buff HDH
+
+### Bug đã sửa
+
+1. **ROOT CAUSE "job failed" — sai đường dẫn script** (buff HDH + cài VS Code fail 100%)
+   - Dockerfile copy `scripts/os-profile.sh` giữ nguyên tên có `.sh`, nhưng http-server gọi `/usr/local/bin/os-profile` (không `.sh`) → `spawn failed` ngay lập tức. Tương tự với `install-vscode`.
+   - Fix: http-server giờ resolve động qua `_script_path()` (thử cả bản không `.sh` và có `.sh`), kiểm tra file tồn tại trước khi spawn và trả lỗi RÕ RÀNG về UI thay vì "spawn failed" chung chung; Dockerfile thêm alias không `.sh` (như `optimize-system`) để chạy tay `os-profile dev`, `install-vscode` được.
+
+2. **AI exec chạy sai HOME (/root)**
+   - `bash -l` kế thừa env của root → đọc `/root/.bash_profile` (permission denied) và `$HOME` sai cho mọi lệnh AI.
+   - Fix: truyền thẳng `HOME=/home/user, USER=user, LOGNAME=user` vào env con TRƯỚC khi bash đọc profile + `cd /home/user` chặn profile lạ đổi thư mục.
+
+3. **AI exec chạy quyền root tạo file root-owned trong /home/user**
+   - Giờ chạy bằng quyền `user` (preexec setuid/gid) — file do AI tạo ra owner đúng; cần root thì `sudo` (NOPASSWD sẵn trong container).
+   - Timeout giờ kill CẢ PROCESS GROUP (`killpg` + `start_new_session`) — không còn lệnh con (`sleep`, build...) sống sót ngầm sau khi hủy.
+
+4. **Modal mật khẩu VNC kẹt khi bỏ qua**: đóng modal (Esc/nút Bỏ qua/backdrop) mà chưa nhập pass → iframe vẫn load, noVNC sẽ tự hỏi sau. Đổi chất lượng ảnh trước lúc kết nối cũng không còn reload oan iframe.
+
+5. **Profile Lite "giả"**: trước chỉ in "không có gói nào" — giờ dọn thật: apt cache/lists, thumbnails, /tmp cũ, drop page cache + báo số MB giải phóng.
+
+6. **Cài VS Code im lặng ~1 phút khi download**: giờ log tiến độ mỗi 5 giây ("...đã tải NMB").
+
+7. **Config AI JSON vỡ nếu key chứa ký tự đặc biệt**: start.sh ghi config qua `python3 json.dump` thay vì heredoc bash.
+
+### Ghi chú test
+
+| Test | Kết quả |
+|------|---------|
+| `_script_path` resolve đúng cả 2 layout (alias + .sh) | PASS |
+| POST /api/tasks/run/vscode → script-missing báo lỗi rõ ràng | PASS |
+| AI chat gọi OpenAI thật: key sai → 502 + msg sạch (key bị mask) | PASS |
+| ai_exec: whoami=user, HOME=/home/user, pwd=/home/user, file owner=user | PASS |
+| sudo NOPASSWD từ user context | PASS |
+| timeout 3s → rc=124 sau đúng ~3s, pgrep xác nhận KHÔNG leak tiến trình | PASS |
+
 ## 2026-08-25 (4) — Mật khẩu VNC, ảnh màn hình, Buff HDH, VS Code PC, AI CLI
 
 ### Thêm mới

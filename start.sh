@@ -426,15 +426,19 @@ export AI_API_LINK="${AI_API_LINK:-${AI_API_URL:-}}" AI_API_KEY="${AI_API_KEY:-}
 export AI_MODEL="${AI_MODEL:-}" AI_NAME="${AI_NAME:-AI Assistant}"
 export AI_PROVIDER="${AI_PROVIDER:-openai}" AI_EXEC_TIMEOUT="${AI_EXEC_TIMEOUT:-240}"
 mkdir -p /home/user/.ai-cli /home/user/.config/os-profiles
-cat > /home/user/.ai-cli/config.json << AIJSON
-{
-  "provider": "${AI_PROVIDER}",
-  "api_link": "${AI_API_LINK}",
-  "api_key": "${AI_API_KEY}",
-  "model": "${AI_MODEL}",
-  "name": "${AI_NAME}"
+# Ghi qua python3 de JSON luon hop le (key co the chua ky tu dac biet)
+python3 - << 'PYAI'
+import json, os
+cfg = {
+    "provider": os.environ.get("AI_PROVIDER", "openai"),
+    "api_link": os.environ.get("AI_API_LINK", ""),
+    "api_key": os.environ.get("AI_API_KEY", ""),
+    "model": os.environ.get("AI_MODEL", ""),
+    "name": os.environ.get("AI_NAME", "AI Assistant"),
 }
-AIJSON
+with open("/home/user/.ai-cli/config.json", "w") as f:
+    json.dump(cfg, f, indent=2)
+PYAI
 chmod 600 /home/user/.ai-cli/config.json 2>/dev/null || true
 chown -R user:user /home/user/.ai-cli 2>/dev/null || true
 if [ -n "$AI_API_LINK" ] && [ -n "$AI_API_KEY" ] && [ -n "$AI_MODEL" ]; then

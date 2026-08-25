@@ -78,7 +78,23 @@ fi
 
 step "Cai dat cac goi"
 if [ -z "$PACKS" ]; then
-    log "Khong co goi nao can tai."
+    log "Khong co goi nao can tai - chuyen sang don dep + tinh chinh."
+    DISK_BEFORE=$(df -k / 2>/dev/null | awk 'NR==2{print $3}')
+    apt-get clean 2>/dev/null || true
+    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
+    rm -rf /home/user/.cache/thumbnails /home/user/.cache/mozilla 2>/dev/null || true
+    find /tmp -mindepth 1 -maxdepth 1 -mmin +60 \
+        ! -name '.X11-unix' ! -name '.ICE-unix' ! -name '.font-unix' \
+        ! -name '.XIM-unix' ! -name '.Test-unix' \
+        -exec rm -rf {} + 2>/dev/null || true
+    sync 2>/dev/null || true
+    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null \
+        && log "Da giam tai page cache" \
+        || log "(drop_caches bi chan boi container runtime - binh thuong)"
+    DISK_AFTER=$(df -k / 2>/dev/null | awk 'NR==2{print $3}')
+    FREED_MB=$(( (DISK_BEFORE - DISK_AFTER) / 1024 ))
+    [ "$FREED_MB" -lt 0 ] && FREED_MB=0
+    log "Lite: da don dep, giai phong ~${FREED_MB}MB disk"
 else
     TOTAL=$(echo $PACKS | wc -w)
     i=0

@@ -684,6 +684,7 @@ AI_PROVIDER=openai     # openai | gemini (tu chon)</code><button class="copy-btn
     <input type="password" class="pw-input" id="pw-value" autocomplete="off" placeholder="mat khau..." onkeydown="if(event.keyCode===13)pwSubmit()">
     <label style="font-size:10px;color:var(--dim);display:flex;gap:5px;align-items:center;justify-content:center;cursor:pointer"><input type="checkbox" id="pw-show" onchange="$('pw-value').type=this.checked?'text':'password'"> Hien mat khau</label>
     <button class="btn" style="width:100%;margin-top:12px;padding:10px" onclick="pwSubmit()">Ket noi</button>
+    <button class="btn secondary" style="width:100%;margin-top:6px" onclick="pwSkip()">Bo qua - de noVNC hoi sau</button>
   </div>
 </div>
 
@@ -1028,6 +1029,7 @@ var IMG_PRESETS={
   save:{q:3,c:9}
 };
 var lastPw='';
+var vncStarted=false;
 function curImgKey(){
   var k=null;
   try{k=localStorage.getItem('rd_img')}catch(e){}
@@ -1040,6 +1042,7 @@ function frameUrl(q,c){
 }
 function setFrameFromPreset(){
   var p=IMG_PRESETS[curImgKey()];
+  vncStarted=true;
   $('vnc-frame').src=frameUrl(p.q,p.c);
 }
 function loadVNCFrame(){
@@ -1061,10 +1064,15 @@ function pwSubmit(){
   if(v)lastPw=v;
   setFrameFromPreset();
 }
+function pwSkip(){
+  closeModal('modal-pass');
+  setFrameFromPreset(); /* khong co pass -> noVNC tu hoi trong iframe */
+}
 function applyImgQuality(key){
   try{localStorage.setItem('rd_img',key)}catch(e){}
-  var p=IMG_PRESETS[key]||IMG_PRESETS.balance;
   $('img-quality').value=key;
+  if(!vncStarted)return; /* frame chua load - lua chon se dung khi ket noi */
+  var p=IMG_PRESETS[key]||IMG_PRESETS.balance;
   $('vnc-frame').src=frameUrl(p.q,p.c);
 }
 
@@ -1115,12 +1123,18 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     closeModal('modal-guide');closeModal('modal-optimizer');closeModal('modal-logs');closeModal('modal-wallpaper');
     closeModal('modal-wizard');closeModal('modal-term');closeModal('modal-ai');
+    if($('modal-pass').className.indexOf('open')>=0){closeModal('modal-pass');if(!vncStarted)setFrameFromPreset()}
     termDisconnect();
     optStopStream();
   }
 });
 qsa('.modal').forEach(function(m){
-  m.addEventListener('click',function(e){if(e.target===m)m.className=m.className.replace(/ open/g,'')});
+  m.addEventListener('click',function(e){
+    if(e.target===m){
+      m.className=m.className.replace(/ open/g,'');
+      if(m.id==='modal-pass'&&!vncStarted)setFrameFromPreset();
+    }
+  });
 });
 
 qsa('#guide-tabs .g-tab').forEach(function(t){

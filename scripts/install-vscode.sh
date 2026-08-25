@@ -41,7 +41,16 @@ URL="https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
 rm -f "$DEB"
 step "Tai go .deb tu microsoft.com (~100MB)"
 log "Dang tai: $URL"
-if ! wget -q -O "$DEB" "$URL"; then
+wget -q -O "$DEB" "$URL" &
+WPID=$!
+DL_FAIL=0
+while kill -0 "$WPID" 2>/dev/null; do
+    sleep 5
+    CUR_MB=$(du -m "$DEB" 2>/dev/null | cut -f1)
+    log "  ...da tai ${CUR_MB:-0}MB"
+done
+wait "$WPID" || DL_FAIL=1
+if [ "$DL_FAIL" = "1" ] || [ ! -s "$DEB" ]; then
     log "FAIL: khong tai duoc go .deb (kiem tra mang)."
     echo "TASK_RESULT_JSON:{\"ok\":false,\"reason\":\"download failed\",\"duration_s\":$(($(date +%s) - START_TS))}"
     exit 1
