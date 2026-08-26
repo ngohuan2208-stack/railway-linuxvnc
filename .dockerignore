@@ -1,5 +1,6 @@
-cùng lúc , đổi ưua .git
+.git
 .gitignore
+.gitattributes
 .dockerignore
 README.md
 CHANGELOG.md

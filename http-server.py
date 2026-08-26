@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 
 import aiohttp
 import psutil
@@ -29,6 +30,19 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger(__name__)
+
+def _env_int(name, default):
+    """Read an integer env var WITHOUT ever raising at import time.
+
+    Missing / empty / garbage values all fall back to default. A raw
+    int(os.environ[...]) here used to be a crash-loop vector: any empty
+    PORT-style variable kills the process ~200ms after spawn.
+    NOTE: must be defined before the constant block below executes.
+    """
+    try:
+        return int(str(os.environ.get(name, "")).strip() or default)
+    except (TypeError, ValueError):
+        return default
 
 # AI CLI helpers live in /usr/local/bin (copied from scripts/ by Docker).
 sys.path.insert(0, "/usr/local/bin")
@@ -43,7 +57,7 @@ except Exception as _ai_err:  # pragma: no cover
 VNC_HOST = "127.0.0.1"
 VNC_PORT = 5901
 CODE_HOST = "127.0.0.1"
-CODE_PORT = int(os.environ.get("CODE_SERVER_PORT", "8443"))
+CODE_PORT = _env_int("CODE_SERVER_PORT", 8443)
 NOVNC_DIR = "/usr/share/novnc"
 STATIC_DIR = "/srv"
 OPTIMIZER_BIN = "/usr/local/bin/optimize-system"
@@ -63,10 +77,10 @@ WALLPAPER_PRESETS = {
     "forest": (6, 58, 40, 16, 185, 129),
 }
 
-PORT = int(os.environ.get("PORT", "8080"))
-VNC_CONNECT_WINDOW = int(os.environ.get("VNC_CONNECT_WINDOW", "120"))
-VNC_IDLE_TIMEOUT = int(os.environ.get("VNC_IDLE_TIMEOUT", "30"))
-BOOT_GRACE_SEC = int(os.environ.get("BOOT_GRACE_SEC", "240"))
+PORT = _env_int("PORT", 8080)
+VNC_CONNECT_WINDOW = _env_int("VNC_CONNECT_WINDOW", 120)
+VNC_IDLE_TIMEOUT = _env_int("VNC_IDLE_TIMEOUT", 30)
+BOOT_GRACE_SEC = _env_int("BOOT_GRACE_SEC", 240)
 PROCESS_START = time.time()
 
 stats_cache = {"data": None, "ts": 0}
@@ -133,15 +147,6 @@ def listening(port):
     return False
 
 
-def tcp_ready(host, port, timeout=0.6):
-    import socket
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except Exception:
-        return False
-
-
 def count_proc(name):
     n = 0
     me = os.getpid()
@@ -171,6 +176,7 @@ HOP_HEADERS = {
 async def on_startup(app):
     global client_session
     client_session = aiohttp.ClientSession()
+    create_jobs()
     asyncio.create_task(zombie_reaper())
 
 
@@ -367,7 +373,7 @@ def collect_stats():
         "mem_total": mem_total,
         "mem_used": mem_used,
         "mem_percent": mem_percent,
-        "mem_limit_mb": (cg_limit // MB) if cg_limit else int(os.environ.get("MEM_LIMIT_MB", "1228")),
+        "mem_limit_mb": (cg_limit // MB) if cg_limit else _env_int("MEM_LIMIT_MB", 1228),
         "swap_total": swap.total,
         "swap_used": swap.used,
         "swap_percent": swap.percent,
@@ -382,7 +388,7 @@ def collect_stats():
         "processes": len(psutil.pids()),
         "idle_ms": idle_ms,
         "suspended": suspended,
-        "idle_suspend_enabled": int(os.environ.get("IDLE_TIMEOUT", "0")) > 0,
+        "idle_suspend_enabled": _env_int("IDLE_TIMEOUT", 0) > 0,
         "resolution": os.environ.get("RESOLUTION", ""),
         "fps": fps,
         "timestamp": int(now),
@@ -529,7 +535,7 @@ async def start_code_server(request):
         return web.json_response({"status": "error",
                                   "msg": "start failed"}, status=500)
 
-    deadline = time.time() + int(os.environ.get("CODE_START_TIMEOUT", "30"))
+    deadline = time.time() + _env_int("CODE_START_TIMEOUT", 30)
     while time.time() < deadline:
         await asyncio.sleep(1.5)
         if request.transport is None or request.transport.is_closing():
@@ -729,7 +735,6 @@ LOG_WHITELIST = {
     "boot": "/var/log/boot.log",
     "vnc": "/var/log/supervisor/xvnc.log",
     "xfce": "/var/log/supervisor/desktop.log",
-    "websocket": "/var/log/supervisor/httpserver.log",
     "watchdog": "/var/log/supervisor/watchdog.log",
     "optimizer": "/var/log/optimizer.log",
     "code-server": "/var/log/supervisor/code-server.log",
@@ -885,7 +890,10 @@ class OptimizerJob:
         await self.finish(rc)
 
 
-optimizer = OptimizerJob()
+# Created lazily in on_startup(): the constructor builds asyncio.Lock(),
+# which must not be instantiated before an event loop exists (it would
+# bind to a different/absent loop on some Python versions).
+optimizer: "OptimizerJob" = None
 
 
 async def optimize_run(request):
@@ -1074,7 +1082,16 @@ class TaskJob:
         await self.finish(rc)
 
 
-task_job = TaskJob()
+task_job: "TaskJob" = None
+
+
+def create_jobs():
+    """Instantiate background jobs once the loop is up (see note above)."""
+    global optimizer, task_job
+    if optimizer is None:
+        optimizer = OptimizerJob()
+    if task_job is None:
+        task_job = TaskJob()
 
 
 async def tasks_status(request):
@@ -1404,8 +1421,9 @@ async def wallpaper_preset(request):
                                   "msg": "unknown preset"}, status=404)
     os.makedirs(PRESET_DIR, exist_ok=True)
     out = os.path.join(PRESET_DIR, name + ".png")
-    res = (os.environ.get("RESOLUTION", "1600x900") or "1600x900").split("x")
-    w, h = int(res[0]), int(res[1])
+    m = re.match(r"^(\d{2,5})x(\d{2,5})$",
+                 (os.environ.get("RESOLUTION") or "").strip())
+    w, h = (int(m.group(1)), int(m.group(2))) if m else (1600, 900)
     cmd = ["python3", WALLPAPER_GEN, out, str(w), str(h)] + \
         [str(c) for c in WALLPAPER_PRESETS[name]]
     try:
@@ -1523,7 +1541,27 @@ async def system_power(request):
 
 # ---------------------------------------------------------------- routing
 
-app = web.Application(client_max_size=8 * 1024 * 1024)
+@web.middleware
+async def error_middleware(request, handler):
+    """Last-resort guard: a buggy handler must never take the server down
+    nor leak internals to the client. Full traceback goes to stderr
+    (/dev/stderr -> Railway deploy logs); client gets a clean JSON 500.
+    """
+    try:
+        return await handler(request)
+    except web.HTTPException:
+        raise
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("unhandled error on %s %s",
+                      request.method, request.path_qs)
+        return web.json_response(
+            {"status": "error", "msg": "internal error"}, status=500)
+
+
+app = web.Application(middlewares=[error_middleware],
+                      client_max_size=8 * 1024 * 1024)
 app.on_startup.append(on_startup)
 app.on_cleanup.append(cleanup)
 app.router.add_get("/", handle_index)
@@ -1557,22 +1595,25 @@ app.router.add_route("*", "/code/{path:.*}", code_proxy)
 app.router.add_get("/novnc/{path:.*}", handle_novnc)
 app.router.add_get("/websockify", vnc_ws_handler)
 
-
-async def handle_static(request):
-    rel = request.match_info.get("path", "")
-    fpath = safe_join(NOVNC_DIR, rel)
-    if fpath and os.path.isfile(fpath):
-        return web.FileResponse(fpath)
-    return web.Response(status=404)
-
-
-app.router.add_get("/{path:.*}", handle_static)
+# Catch-all serves the same noVNC static tree (same safe_join guard).
+app.router.add_get("/{path:.*}", handle_novnc)
 
 
 def main():
-    port = PORT
-    log.info("Starting HTTP server on 0.0.0.0:%s", port)
-    web.run_app(app, host="0.0.0.0", port=port)
+    log.info("Starting HTTP server on 0.0.0.0:%s (py=%s aiohttp=%s)",
+             PORT, sys.version.split()[0],
+             getattr(aiohttp, "__version__", "?"))
+    try:
+        # access_log=None: stats are polled every ~2s per client; logging
+        # each poll only spams Railway deploy logs with no diagnostic value.
+        web.run_app(app, host="0.0.0.0", port=PORT, access_log=None)
+    except Exception:
+        # ALWAYS print the full traceback to stderr (/dev/stderr -> Railway
+        # deploy logs) before a non-zero exit, so a crash is diagnosable
+        # from supervisord output alone.
+        traceback.print_exc()
+        sys.stderr.flush()
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

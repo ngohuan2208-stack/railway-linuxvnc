@@ -37,13 +37,19 @@ case "${VNC_PUBLIC:-0}" in 1|true|TRUE|yes) VNC_PUBLIC=1 ;; *) VNC_PUBLIC=0 ;; e
 VNC_TCP_PROXY=${VNC_TCP_PROXY:-}
 
 case "$PORT" in ''|*[!0-9]*) PORT=8080 ;; esac
-[ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ] && PORT=8080
+if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then PORT=8080; fi
 case "$RESOLUTION" in ''|*[!0-9x]*|*x*x*) RESOLUTION=1600x900 ;; esac
 case "$VNC_DEPTH" in 16|24) ;; *) VNC_DEPTH=24 ;; esac
 case "$VNC_FPS" in ''|*[!0-9]*) VNC_FPS=30 ;; esac
 [ "$VNC_FPS" -lt 1 ] && VNC_FPS=30; [ "$VNC_FPS" -gt 60 ] && VNC_FPS=60
 case "$IDLE_TIMEOUT" in ''|*[!0-9]*) IDLE_TIMEOUT=0 ;; esac
 case "$MEM_LIMIT_MB" in ''|*[!0-9]*) MEM_LIMIT_MB=1228 ;; esac
+# These feed int() parsers in watchdog/backup scripts - garbage here would
+# crash-loop them exactly like a broken httpserver.
+case "$CPU_MAX_PCT" in ''|*[!0-9]*) CPU_MAX_PCT=85 ;; esac
+case "$DISK_CLEAN_PCT" in ''|*[!0-9]*) DISK_CLEAN_PCT=80 ;; esac
+case "$WATCHDOG_INTERVAL" in ''|*[!0-9]*) WATCHDOG_INTERVAL=5 ;; esac
+case "$BACKUP_INTERVAL_MIN" in ''|*[!0-9]*) BACKUP_INTERVAL_MIN=30 ;; esac
 
 export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
 export AUTO_BACKUP BACKUP_INTERVAL_MIN AUTO_BACKUP_ON_EXIT ENABLE_PROXY ENABLE_AUDIO
@@ -528,6 +534,18 @@ _term_handler() {
     exit 0
 }
 trap _term_handler SIGTERM SIGINT
+
+# ---------------- PREFLIGHT: python deps of the HTTP server ----------------
+# httpserver needs aiohttp+psutil. If they are missing it would crash-loop
+# forever (exit 1 ~200ms after spawn) and /health would never answer ->
+# Railway deploy FAILED with no obvious cause. Fail FAST and LOUD instead.
+if ! python3 -c 'import aiohttp, psutil' >/dev/null 2>&1; then
+    blog "[ERROR] python3 dependencies missing (aiohttp/psutil) - HTTP server cannot start."
+    blog "[ERROR] Fix: redeploy WITHOUT build cache (docker build --no-cache / Railway redeploy)."
+    blog "[ERROR] Aborting boot so the root cause stays visible in deploy logs."
+    exit 1
+fi
+blog "[BOOT] Python deps OK (aiohttp + psutil)"
 
 # ---------------- START SUPERVISORD ----------------
 /usr/bin/supervisord -c /etc/supervisor/supervisord.conf &

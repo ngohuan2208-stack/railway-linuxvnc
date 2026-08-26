@@ -44,14 +44,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav \
     gstreamer1.0-alsa \
-    rclone htop onboard xprintidle xdotool \
+    rclone htop onboard xprintidle \
     arc-theme papirus-icon-theme \
     xfce4-taskmanager \
     pulseaudio \
     wget curl git nano procps ca-certificates \
     sudo zip unzip p7zip-full \
     fonts-dejavu-core fonts-liberation fonts-noto-color-emoji tzdata net-tools \
-    python3 python3-pip python3-requests python3-psutil python3-aiohttp \
+    python3 python3-pip python3-psutil python3-aiohttp \
     $( [ "$INSTALL_GIMP" = "1" ] && echo gimp ) \
     $( [ "$INSTALL_LIBREOFFICE" = "1" ] && echo libreoffice-writer libreoffice-calc libreoffice-impress ) \
     $( [ "$INSTALL_VLC" = "1" ] && echo vlc ) \
@@ -60,6 +60,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* \
               /usr/share/doc/* /usr/share/man/* /tmp/*
+
+# Build-time smoke test: the image must FAIL TO BUILD (not crash-loop at
+# runtime) when the HTTP server's dependencies are missing. This is the
+# guard against the "httpserver exits 1 after ~200ms forever" failure mode.
+RUN python3 -c "import aiohttp, psutil; print('python deps ok: aiohttp', aiohttp.__version__)"
 
 RUN if [ "$INSTALL_NODE" = "1" ]; then \
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -77,7 +82,11 @@ RUN useradd -m -d /home/user -s /bin/bash user \
 
 RUN mkdir -p /home/user/{Desktop,Documents,Downloads,Projects,.config,.cache,.vnc,.backups,Drive,.local/share/code-server,.wallpapers}
 
+# Backend scripts + python sources in ONE layer each group: scripts change
+# less often than index.html (moved to the very end of the build).
 COPY scripts/ /usr/local/bin/
+COPY http-server.py idle-monitor.py resource-watchdog.py wallpaper-gen.py \
+     /usr/local/bin/
 RUN chmod +x /usr/local/bin/* \
     && cp /usr/local/bin/optimize.sh /usr/local/bin/optimize-system \
     && cp /usr/local/bin/os-profile.sh /usr/local/bin/os-profile \
@@ -85,13 +94,9 @@ RUN chmod +x /usr/local/bin/* \
     && chmod +x /usr/local/bin/optimize-system /usr/local/bin/os-profile \
                  /usr/local/bin/install-vscode
 
-COPY http-server.py /usr/local/bin/http-server.py
-COPY idle-monitor.py /usr/local/bin/idle-monitor.py
-COPY resource-watchdog.py /usr/local/bin/resource-watchdog.py
-COPY index.html /srv/index.html
-COPY wallpaper-gen.py /usr/local/bin/wallpaper-gen.py
-
 COPY start.sh /start.sh
+COPY supervisord.conf /etc/supervisor/supervisord.conf
+
 # Pre-generate default + gradient presets (tiny PNGs) so the wallpaper
 # picker works offline and instantly.
 RUN chmod +x /start.sh \
@@ -104,7 +109,8 @@ RUN chmod +x /start.sh \
     && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/neon.png 1600 900 76 29 149 236 72 153 \
     && python3 /usr/local/bin/wallpaper-gen.py /opt/wallpapers/forest.png 1600 900 6 58 40 16 185 129
 
-COPY supervisord.conf /etc/supervisor/supervisord.conf
+# Most volatile file last: UI edits no longer invalidate any earlier layer.
+COPY index.html /srv/index.html
 
 EXPOSE 8080
 
