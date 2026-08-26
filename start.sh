@@ -181,7 +181,6 @@ exec Xvnc :1 \\
     -AlwaysShared \\
     -FrameRate ${VNC_FPS} -CompareFB 2 -ZlibLevel 6 \\
     -BlacklistThreshold=0 -UseBlacklist=0 \\
-    -MaxConnections=${MAX_VNC_CONNECTIONS} \\
     -Log "*:stderr:30"
 RUNXVNC
 chmod +x /usr/local/bin/run-xvnc.sh
