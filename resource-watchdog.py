@@ -122,9 +122,9 @@ def handle_memory():
     connection_factor = 1.0
     try:
         with open("/proc/net/tcp", "r") as f:
-            # Count VNC connections (port 5901 = 0x170D)
+            # Count VNC connections (port 5902 = 0x170E)
             vnc_conns = sum(1 for line in f.readlines()[1:] 
-                          if "170D" in line.split()[1] if len(line.split()) > 1)
+                          if "170E" in line.split()[1] if len(line.split()) > 1)
             if vnc_conns > 1:
                 connection_factor = 1.0 + (vnc_conns - 1) * 0.1  # 10% more aggressive per extra connection
     except Exception:
@@ -242,7 +242,7 @@ def desktop_session_proc():
 SERVICES = [
     # key, supervisor name, healthy check, log tag
     {"key": "vnc", "supervisor": "xvnc",
-     "check": lambda: listening(5901), "tag": "VNC"},
+     "check": lambda: listening(5902), "tag": "VNC"},
     {"key": "desktop", "supervisor": "desktop",
      "check": lambda: proc_alive(desktop_session_proc()), "tag": "DESKTOP"},
     {"key": "httpserver", "supervisor": "httpserver",
@@ -324,7 +324,7 @@ def check_vnc_connections():
                 parts = line.split()
                 if len(parts) > 1:
                     local_port = parts[1].split(":")[1] if ":" in parts[1] else ""
-                    if local_port == "170D":  # 5901 in hex
+                    if local_port == "170E":  # 5902 in hex
                         vnc_conns += 1
         
         if vnc_conns > 0:

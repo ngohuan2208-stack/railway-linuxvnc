@@ -71,15 +71,16 @@ blog() {
 }
 
 # ---------------- RESERVED PORT GUARD ----------------
-# A PORT that collides with an internal service (Xvnc 5901, code-server
-# 8443) makes the HTTP server die with 'address already in use' FOREVER ->
-# Railway healthcheck never passes (observed in production: PORT=5901 got
-# injected/set, httpserver crash-looped for the whole deploy timeout).
-if [ "$PORT" = "5901" ] || [ "$PORT" = "${CODE_SERVER_PORT:-8443}" ]; then
-    echo "[WARN] PORT=$PORT trung voi port noi bo (Xvnc/code-server) -> ep ve 8080"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [WARN] PORT=$PORT collided with internal service, forced to 8080" >> /var/log/boot.log
+# Railway may inject PORT=5901 which collides with Xvnc's default port.
+# Instead of overriding PORT (which breaks Railway healthcheck since it
+# probes the original PORT), we change Xvnc to use port 5902 internally.
+if [ "$PORT" = "${CODE_SERVER_PORT:-8443}" ]; then
+    echo "[WARN] PORT=$PORT trung voi code-server -> ep ve 8080"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [WARN] PORT=$PORT collided with code-server, forced to 8080" >> /var/log/boot.log
     PORT=8080
 fi
+# Xvnc uses 5902 internally so Railway's PORT=5901 doesn't conflict
+VNC_INTERNAL_PORT=5902
 
 # Write default config ONLY if missing -> user customizations (wallpaper,
 # panel, themes...) survive container restarts on a persistent volume.
@@ -138,7 +139,7 @@ if [ "$VNC_PASSWORD" = "railwaylinux" ]; then
 fi
 export VNC_PASSWORD VNC_PASSWORD_DEFAULTED
 if [ "$VNC_PUBLIC" = "1" ]; then
-    blog "[VNC] public bind 0.0.0.0:5901 (TCP proxy: ${VNC_TCP_PROXY:-chua cau hinh})"
+    blog "[VNC] public bind 0.0.0.0:5902 (TCP proxy: ${VNC_TCP_PROXY:-chua cau hinh})"
 fi
 
 write_once /home/user/.vnc/xstartup << 'XSTARTUP'
@@ -176,7 +177,7 @@ fi
 # Optimized for multi-user support with ${MAX_VNC_CONNECTIONS} concurrent connections
 exec Xvnc :1 \\
     -geometry ${RESOLUTION} -depth ${VNC_DEPTH} \\
-    -rfbport 5901 ${XNC_BIND} \\
+    -rfbport 5902 ${XNC_BIND} \\
     \$SECARGS \\
     -AlwaysShared \\
     -FrameRate ${VNC_FPS} -CompareFB 2 -ZlibLevel 6 \\
@@ -574,18 +575,18 @@ blog "[WS] WebSocket bridge pending"
 port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
 (
-    # [VNC] wait for port 5901
+    # [VNC] wait for port 5902
     VNC_DEADLINE=$(( $(date +%s) + BOOT_GRACE_SEC ))
     VNC_UP=0
     while [ "$(date +%s)" -lt "$VNC_DEADLINE" ]; do
-        if port_open 5901; then VNC_UP=1; break; fi
+        if port_open 5902; then VNC_UP=1; break; fi
         sleep 1
     done
     if [ "$VNC_UP" != "1" ]; then
-        blog "[ERROR] VNC failed to open 5901 within ${BOOT_GRACE_SEC}s"
+        blog "[ERROR] VNC failed to open 5902 within ${BOOT_GRACE_SEC}s"
         exit 0
     fi
-    blog "[VNC] Waiting for 5901... done"
+    blog "[VNC] Waiting for 5902... done"
     blog "[VNC] Ready"
 
     # [DE] wait for session process

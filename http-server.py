@@ -57,7 +57,7 @@ except Exception as _ai_err:  # pragma: no cover
     log.warning("AI CLI module unavailable: %s", type(_ai_err).__name__)
 
 VNC_HOST = "127.0.0.1"
-VNC_PORT = 5901
+VNC_PORT = 5902
 CODE_HOST = "127.0.0.1"
 CODE_PORT = _env_int("CODE_SERVER_PORT", 8443)
 NOVNC_DIR = "/usr/share/novnc"
