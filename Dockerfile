@@ -83,8 +83,7 @@ RUN useradd -m -d /home/user -s /bin/bash user \
 
 RUN mkdir -p /home/user/{Desktop,Documents,Downloads,Projects,.config,.cache,.vnc,.backups,Drive,.local/share/code-server,.wallpapers}
 
-# Backend scripts + python sources in ONE layer each group: scripts change
-# less often than index.html (moved to the very end of the build).
+# Backend scripts + python sources (v2: lazy asyncio.Lock init)
 COPY scripts/ /usr/local/bin/
 COPY http-server.py idle-monitor.py resource-watchdog.py wallpaper-gen.py \
      /usr/local/bin/
