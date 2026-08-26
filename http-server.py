@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import threading
@@ -1598,6 +1599,35 @@ app.router.add_get("/websockify", vnc_ws_handler)
 # Catch-all serves the same noVNC static tree (same safe_join guard).
 app.router.add_get("/{path:.*}", handle_novnc)
 
+FALLBACK_PORT = 8080
+
+
+async def _serve():
+    """Serve the app on $PORT AND 8080 simultaneously.
+
+    Railway's healthcheck/domain target port does not always match the
+    PORT variable users set (production incident: PORT=5901 while the
+    platform probed a different port). Listening on both makes the
+    service reachable regardless of which one the platform picked.
+    Ports belonging to internal services (Xvnc, code-server) are never
+    touched.
+    """
+    runner = web.AppRunner(app, access_log=None)
+    await runner.setup()
+    try:
+        ports = sorted({PORT, FALLBACK_PORT} - {VNC_PORT, CODE_PORT})
+        for p in ports:
+            site = web.TCPSite(runner, "0.0.0.0", p)
+            await site.start()
+            log.info("HTTP listening on 0.0.0.0:%d", p)
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop.set)
+        await stop.wait()
+    finally:
+        await runner.cleanup()
+
 
 def main():
     if PORT in (VNC_PORT, CODE_PORT):
@@ -1609,13 +1639,12 @@ def main():
             "code-server=%d). Remove/override the PORT env var "
             "(Railway Variables) and redeploy.", PORT, VNC_PORT, CODE_PORT)
         raise SystemExit(1)
-    log.info("Starting HTTP server on 0.0.0.0:%s (py=%s aiohttp=%s)",
-             PORT, sys.version.split()[0],
-             getattr(aiohttp, "__version__", "?"))
+    log.info("Starting HTTP server (py=%s aiohttp=%s)",
+             sys.version.split()[0], getattr(aiohttp, "__version__", "?"))
     try:
-        # access_log=None: stats are polled every ~2s per client; logging
-        # each poll only spams Railway deploy logs with no diagnostic value.
-        web.run_app(app, host="0.0.0.0", port=PORT, access_log=None)
+        asyncio.run(_serve())
+    except KeyboardInterrupt:
+        pass
     except Exception:
         # ALWAYS print the full traceback to stderr (/dev/stderr -> Railway
         # deploy logs) before a non-zero exit, so a crash is diagnosable
