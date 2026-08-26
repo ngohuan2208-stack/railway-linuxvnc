@@ -90,7 +90,7 @@ PROCESS_START = time.time()
 
 # Connection tracking for multi-user support
 vnc_connections = {}
-vnc_connections_lock = asyncio.Lock()
+vnc_connections_lock = None  # Created lazily in on_startup()
 
 stats_cache = {"data": None, "ts": 0}
 health_cache = {"data": None, "ts": 0}
@@ -187,6 +187,9 @@ def desktop_session_proc():
 
 async def track_vnc_connection(ws_id, client_info, add=True):
     """Track VNC connections for multi-user support."""
+    if vnc_connections_lock is None:
+        # Lock not yet created (during startup), skip tracking
+        return 0
     async with vnc_connections_lock:
         if add:
             vnc_connections[ws_id] = {
@@ -211,8 +214,9 @@ HOP_HEADERS = {
 # ---------------------------------------------------------------- lifecycle
 
 async def on_startup(app):
-    global client_session
+    global client_session, vnc_connections_lock
     client_session = aiohttp.ClientSession()
+    vnc_connections_lock = asyncio.Lock()
     create_jobs()
     asyncio.create_task(zombie_reaper())
 
@@ -520,6 +524,12 @@ async def handle_services(request):
 
 async def vnc_connections_list(request):
     """List active VNC connections."""
+    if vnc_connections_lock is None:
+        return web.json_response({
+            "connections": [],
+            "total": 0,
+            "max": MAX_VNC_CONNECTIONS
+        })
     async with vnc_connections_lock:
         connections = []
         for ws_id, info in vnc_connections.items():
@@ -756,9 +766,10 @@ async def vnc_ws_handler(request):
         try:
             async for msg in ws_server:
                 # Update last active time
-                async with vnc_connections_lock:
-                    if ws_id in vnc_connections:
-                        vnc_connections[ws_id]["last_active"] = time.time()
+                if vnc_connections_lock is not None:
+                    async with vnc_connections_lock:
+                        if ws_id in vnc_connections:
+                            vnc_connections[ws_id]["last_active"] = time.time()
                 
                 if msg.type == web.WSMsgType.TEXT:
                     writer.write(msg.data.encode())
