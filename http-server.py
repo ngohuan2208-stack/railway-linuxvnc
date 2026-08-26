@@ -1600,6 +1600,15 @@ app.router.add_get("/{path:.*}", handle_novnc)
 
 
 def main():
+    if PORT in (VNC_PORT, CODE_PORT):
+        # Defense in depth for start.sh's reserved-port guard: binding on
+        # Xvnc's or code-server's port can only end in 'address already in
+        # use' crash-loops - refuse loudly instead.
+        log.critical(
+            "PORT=%d collides with an internal service (Xvnc=%d, "
+            "code-server=%d). Remove/override the PORT env var "
+            "(Railway Variables) and redeploy.", PORT, VNC_PORT, CODE_PORT)
+        raise SystemExit(1)
     log.info("Starting HTTP server on 0.0.0.0:%s (py=%s aiohttp=%s)",
              PORT, sys.version.split()[0],
              getattr(aiohttp, "__version__", "?"))

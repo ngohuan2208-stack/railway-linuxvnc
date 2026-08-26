@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-08-26 (2) — Hotfix: PORT=5901 làm httpserver crash-loop vĩnh viễn
+
+### Bug đã sửa
+
+1. **ROOT CAUSE deploy FAILED — `PORT=5901` trùng port Xvnc**
+   - Biến `PORT` trong container nhận giá trị `5901` (đặt tay/conflict khi cấu hình TCP Proxy cho VNC) → HTTP server bind trùng port Xvnc → `OSError 98 address already in use` → exit 1 ~200ms, lặp vô hạn → `/health` không bao giờ trả lời → Railway healthcheck fail hết `healthcheckTimeout` (300s) × retries = deploy treo ~7 phút.
+   - Fix 2 lớp: `start.sh` ép `PORT` về 8080 nếu trùng `5901`/`${CODE_SERVER_PORT}` (kèm WARN vào boot log); `http-server.py` tự chặn ở `main()` với thông báo CRITICAL rõ ràng thay vì EADDRINUSE khó hiểu.
+
+## 2026-08-26 (1) — Chống crash-loop httpserver (fail ở build thay vì runtime)
+
+1. Dockerfile thêm smoke test `import aiohttp, psutil` ngay sau layer apt — thiếu dependency giờ làm BUILD FAIL ngay, không còn image hỏng lên Railway crash-loop.
+2. start.sh preflight kiểm tra deps trước khi raise supervisord (fail loud kèm hướng dẫn redeploy không cache).
+3. `_env_int()` cho mọi biến env số — biến rỗng/rác không còn làm process chết lúc import.
+4. Error middleware + traceback đầy đủ ra stderr trước khi exit 1.
+5. Lazy-init OptimizerJob/TaskJob; bỏ dead code (`tcp_ready`, `handle_static` trùng lặp); bỏ package chết (`python3-requests`, `xdotool`); bỏ tab log `websocket` chết.
+6. Tối ưu build/cache: gộp COPY, `index.html` xuống cuối layer; `.dockerignore` sạch (+`.git`); `access_log=None`; desktop startretries 200→50.
+
 ## 2026-08-25 (6) — VNC Client: ket noi bang app VNC that (IP + mat khau)
 
 ### Thêm mới

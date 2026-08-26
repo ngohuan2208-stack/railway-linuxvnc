@@ -65,6 +65,17 @@ blog() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /var/log/boot.log
 }
 
+# ---------------- RESERVED PORT GUARD ----------------
+# A PORT that collides with an internal service (Xvnc 5901, code-server
+# 8443) makes the HTTP server die with 'address already in use' FOREVER ->
+# Railway healthcheck never passes (observed in production: PORT=5901 got
+# injected/set, httpserver crash-looped for the whole deploy timeout).
+if [ "$PORT" = "5901" ] || [ "$PORT" = "${CODE_SERVER_PORT:-8443}" ]; then
+    echo "[WARN] PORT=$PORT trung voi port noi bo (Xvnc/code-server) -> ep ve 8080"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [WARN] PORT=$PORT collided with internal service, forced to 8080" >> /var/log/boot.log
+    PORT=8080
+fi
+
 # Write default config ONLY if missing -> user customizations (wallpaper,
 # panel, themes...) survive container restarts on a persistent volume.
 write_once() {
