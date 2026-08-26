@@ -6,6 +6,8 @@ Service revival policy (no infinite restart loops):
 - Restart attempts use exponential backoff: 30s * 2^fails, capped at 600s.
 - Max 6 restart attempts per rolling hour per service; beyond that it logs
   an ERROR and waits for the window to slide.
+
+Optimized for performance and multi-user support.
 """
 import os
 import subprocess
@@ -18,6 +20,7 @@ MEM_LIMIT_MB = int(os.environ.get("MEM_LIMIT_MB", "1228"))
 CPU_MAX_PCT = int(os.environ.get("CPU_MAX_PCT", "85"))
 DISK_CLEAN_PCT = int(os.environ.get("DISK_CLEAN_PCT", "80"))
 CHECK_INTERVAL = int(os.environ.get("WATCHDOG_INTERVAL", "5"))
+MAX_VNC_CONNECTIONS = int(os.environ.get("MAX_VNC_CONNECTIONS", "3"))
 
 FAIL_THRESHOLD = 2
 BACKOFF_BASE = 30
@@ -36,6 +39,8 @@ HEAVY_APPS = {
 }
 
 cpu_high_since = 0
+last_connections_check = 0
+connections_check_interval = 30  # Check connections every 30 seconds
 
 
 def log(msg):
@@ -101,6 +106,7 @@ def top_by_rss(exclude_protected=True):
 
 
 def handle_memory():
+    """Manage memory usage with multi-user awareness."""
     cg_used, cg_limit = cgroup_mem()
     if cg_used is not None:
         used_mb = cg_used // (1024 * 1024)
@@ -111,8 +117,26 @@ def handle_memory():
         budget_mb = MEM_LIMIT_MB
     pct_of_budget = used_mb / budget_mb * 100
 
-    if pct_of_budget >= 95:
-        log(f"CRITICAL {used_mb}MB/{budget_mb}MB - killing heaviest app")
+    # Adjust thresholds based on number of VNC connections
+    # More connections = more aggressive memory management
+    connection_factor = 1.0
+    try:
+        with open("/proc/net/tcp", "r") as f:
+            # Count VNC connections (port 5901 = 0x170D)
+            vnc_conns = sum(1 for line in f.readlines()[1:] 
+                          if "170D" in line.split()[1] if len(line.split()) > 1)
+            if vnc_conns > 1:
+                connection_factor = 1.0 + (vnc_conns - 1) * 0.1  # 10% more aggressive per extra connection
+    except Exception:
+        pass
+
+    # Apply connection-aware thresholds
+    critical_threshold = 95 / connection_factor
+    high_threshold = 82 / connection_factor
+    medium_threshold = 70 / connection_factor
+
+    if pct_of_budget >= critical_threshold:
+        log(f"CRITICAL {used_mb}MB/{budget_mb}MB (threshold={critical_threshold:.0f}%) - killing heaviest app")
         for rss, pid, name in top_by_rss():
             if name in HEAVY_APPS:
                 try:
@@ -123,12 +147,12 @@ def handle_memory():
                 break
         drop_caches()
 
-    elif pct_of_budget >= 82:
+    elif pct_of_budget >= high_threshold:
         drop_caches()
         for _, pid, _ in top_by_rss()[:4]:
             renice(pid, 15)
 
-    elif pct_of_budget >= 70:
+    elif pct_of_budget >= medium_threshold:
         for _, pid, _ in top_by_rss()[:2]:
             renice(pid, 10)
 
@@ -282,9 +306,42 @@ def revive_services():
         supervisor_action(svc["supervisor"], "restart")
 
 
+def check_vnc_connections():
+    """Monitor VNC connections and optimize resources based on usage."""
+    global last_connections_check
+    now = time.time()
+    
+    if now - last_connections_check < connections_check_interval:
+        return
+    
+    last_connections_check = now
+    
+    try:
+        # Count active VNC connections
+        vnc_conns = 0
+        with open("/proc/net/tcp", "r") as f:
+            for line in f.readlines()[1:]:
+                parts = line.split()
+                if len(parts) > 1:
+                    local_port = parts[1].split(":")[1] if ":" in parts[1] else ""
+                    if local_port == "170D":  # 5901 in hex
+                        vnc_conns += 1
+        
+        if vnc_conns > 0:
+            log(f"Active VNC connections: {vnc_conns}/{MAX_VNC_CONNECTIONS}")
+            
+            # If we have many connections, be more aggressive with memory
+            if vnc_conns >= MAX_VNC_CONNECTIONS:
+                log(f"High connection count ({vnc_conns}) - increasing memory pressure")
+                drop_caches()
+    except Exception as e:
+        log(f"VNC connection check error: {e}")
+
+
 def main():
     log(f"started | mem={MEM_LIMIT_MB}MB cpu<={CPU_MAX_PCT}% "
-        f"disk<{DISK_CLEAN_PCT}% interval={CHECK_INTERVAL}s")
+        f"disk<{DISK_CLEAN_PCT}% interval={CHECK_INTERVAL}s "
+        f"max_connections={MAX_VNC_CONNECTIONS}")
     while True:
         time.sleep(CHECK_INTERVAL)
         try:
@@ -293,6 +350,7 @@ def main():
             avg = psutil.cpu_percent(interval=0.5)
             handle_cpu(avg)
             handle_disk()
+            check_vnc_connections()
         except Exception as e:
             log(f"error: {e}")
 

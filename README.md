@@ -1,15 +1,15 @@
 # Linux Desktop trên Railway
 
-Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi, tối ưu RAM cho Railway.
+Desktop Linux nhẹ (LXQt + noVNC), chạy ổn định 24/7, tự phục hồi, tối ưu RAM cho Railway.
 
 ## Tính năng chính
 
 - **Desktop Linux** — LXQt (mặc định, nhẹ) hoặc XFCE, chọn bằng biến `DESKTOP`
-- **Đa thiết bị cùng lúc** — mở domain trên PC/laptop/điện thoại: tất cả xem và điều khiển chung một desktop (shared session, không giới hạn số thiết bị)
-- **noVNC** + sidebar theo dõi CPU/RAM/Disk/Network/Uptime real-time
+- **Đa thiết bị cùng lúc** — mở domain trên PC/laptop/điện thoại: tất cả xem và điều khiển chung một desktop (shared session, hỗ trợ tối đa 3 kết nối đồng thời)
+- **noVNC** + sidebar theo dõi CPU/RAM/Disk/Network/Uptime real-time + số kết nối VNC
 - **24/7 mode** — desktop KHÔNG tự sleep/suspend khi idle
 - **Tự phục hồi** — watchdog tự restart Xvnc / Desktop / HTTP / code-server khi chết (có backoff, chống restart-loop)
-- **/health** — health check chi tiết từng component (VNC, Desktop, WebSocket, HTTP, Code Server, AI CLI)
+- **/health** — health check chi tiết từng component (VNC, Desktop, WebSocket, HTTP, Code Server, AI CLI) + số kết nối hiện tại
 - **System Optimizer** — dọn dẹp an toàn ngay trên web UI, có dry-run, xem log realtime
 - **Buff hệ điều hành** — wizard chọn profile tối ưu: Lite Siêu Nhẹ / Developer / Media & Design / Driver & Phần cứng / BUFF TAT CA (bỏ qua = giữ mặc định LXQt nhẹ - đẹp - ổn định)
 - **Cài VS Code PC** — 1 nút: tự tải .deb từ microsoft.com và cài, tiến độ hiển thị trong web Terminal
@@ -22,6 +22,7 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 - **Bàn phím ảo** Onboard
 - **YouTube** playback (Chromium + codecs)
 - **Tor proxy** tùy chọn
+- **Theo dõi kết nối** — hiển thị số kết nối VNC real-time trên sidebar
 
 ## Ứng dụng có sẵn
 
@@ -59,6 +60,7 @@ Desktop Linux nhẹ (XFCE + noVNC), chạy ổn định 24/7, tự phục hồi,
 | `VNC_PASSWORD` | `railwaylinux` | Mật khẩu VNC (noVNC sẽ hỏi khi kết nối). Đặt `none` để tắt xác thực (VNC chỉ nghe localhost) |
 | `VNC_PUBLIC` | `0` | `1` = Xvnc nghe 0.0.0.0 — cho phép app VNC thật (RealVNC/TigerVNC/RVNC) kết nối qua TCP Proxy |
 | `VNC_TCP_PROXY` | _(trống)_ | Địa chỉ Railway TCP Proxy của port 5901 (vd `abc.proxy.rlwy.net:12345`) — hiện trong nút **VNC Client** |
+| `MAX_VNC_CONNECTIONS` | `3` | Số kết nối VNC đồng thời tối đa (hỗ trợ多人 dùng chung desktop) |
 | `TZ` | _(trống)_ | Múi giờ, ví dụ `Asia/Ho_Chi_Minh` |
 | `IDLE_TIMEOUT` | `0` | **0 = 24/7 không sleep.** > 0 = giây idle trước khi suspend XFCE (tùy chọn cũ) |
 | `ENABLE_PROXY` | `0` | Bật Tor proxy (1=bật) |
@@ -96,7 +98,7 @@ DESKTOP=xfce   # XFCE4 cổ điển với dock trong suốt
 
 ## Nhiều thiết bị cùng lúc
 
-Desktop chạy dạng **shared session**: mọi thiết bị mở cùng domain sẽ thấy cùng màn hình và cùng điều khiển (con trỏ di chuyển theo thiết bị đang thao tác). Không cần đăng nhập thêm, không giới hạn số kết nối đồng thời.
+Desktop chạy dạng **shared session**: mọi thiết bị mở cùng domain sẽ thấy cùng màn hình và cùng điều khiển (con trỏ di chuyển theo thiết bị đang thao tác). Hỗ trợ tối đa **3 kết nối đồng thời** (có thể tùy chỉnh qua `MAX_VNC_CONNECTIONS`). Số kết nối hiện tại hiển thị real-time trên sidebar.
 
 ## FPS & Hiển thị
 
@@ -105,6 +107,7 @@ Sidebar hiển thị:
 - **Network** — Sent/Recv bytes
 - **Uptime** — uptime thật của container (backend trả về)
 - **FPS** — hiển thị `N/A` vì Xvnc không expose số frame thực tế; hệ thống KHÔNG bịa dữ liệu
+- **Kết nối VNC** — số kết nối đồng thời hiện tại / tối đa (hiển thị trên badge ở header sidebar)
 
 ## YouTube & Video
 

@@ -31,6 +31,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CODE_START_TIMEOUT=30 \
     VNC_PUBLIC=0
 
+# Install core packages in a single layer for better caching
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     dbus dbus-x11 \

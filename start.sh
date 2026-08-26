@@ -36,6 +36,9 @@ case "$DESKTOP" in xfce|lxqt) ;; *) DESKTOP=lxqt ;; esac
 case "${VNC_PUBLIC:-0}" in 1|true|TRUE|yes) VNC_PUBLIC=1 ;; *) VNC_PUBLIC=0 ;; esac
 VNC_TCP_PROXY=${VNC_TCP_PROXY:-}
 
+# Maximum concurrent VNC connections
+MAX_VNC_CONNECTIONS=${MAX_VNC_CONNECTIONS:-3}
+
 case "$PORT" in ''|*[!0-9]*) PORT=8080 ;; esac
 if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then PORT=8080; fi
 case "$RESOLUTION" in ''|*[!0-9x]*|*x*x*) RESOLUTION=1600x900 ;; esac
@@ -50,12 +53,14 @@ case "$CPU_MAX_PCT" in ''|*[!0-9]*) CPU_MAX_PCT=85 ;; esac
 case "$DISK_CLEAN_PCT" in ''|*[!0-9]*) DISK_CLEAN_PCT=80 ;; esac
 case "$WATCHDOG_INTERVAL" in ''|*[!0-9]*) WATCHDOG_INTERVAL=5 ;; esac
 case "$BACKUP_INTERVAL_MIN" in ''|*[!0-9]*) BACKUP_INTERVAL_MIN=30 ;; esac
+case "$MAX_VNC_CONNECTIONS" in ''|*[!0-9]*) MAX_VNC_CONNECTIONS=3 ;; esac
 
 export PORT RESOLUTION VNC_DEPTH VNC_FPS TZ IDLE_TIMEOUT IDLE_CHECK DROP_CACHE
 export AUTO_BACKUP BACKUP_INTERVAL_MIN AUTO_BACKUP_ON_EXIT ENABLE_PROXY ENABLE_AUDIO
 export MEM_LIMIT_MB CPU_MAX_PCT DISK_CLEAN_PCT WATCHDOG_INTERVAL BOOT_GRACE_SEC
 export DESKTOP
 export VNC_PUBLIC="${VNC_PUBLIC:-0}" VNC_TCP_PROXY="${VNC_TCP_PROXY:-}"
+export MAX_VNC_CONNECTIONS
 
 mkdir -p /var/log/supervisor /var/log
 touch /var/log/boot.log
@@ -168,6 +173,7 @@ if [ -s /home/user/.vnc/passwd ]; then
 fi
 # NOTE: only TigerVNC-supported options here. Debian bookworm Xvnc has NO
 # -QualityLevel/-CompressionLevel/-MaxCutPending (they crash startup).
+# Optimized for multi-user support with ${MAX_VNC_CONNECTIONS} concurrent connections
 exec Xvnc :1 \\
     -geometry ${RESOLUTION} -depth ${VNC_DEPTH} \\
     -rfbport 5901 ${XNC_BIND} \\
@@ -175,6 +181,7 @@ exec Xvnc :1 \\
     -AlwaysShared \\
     -FrameRate ${VNC_FPS} -CompareFB 2 -ZlibLevel 6 \\
     -BlacklistThreshold=0 -UseBlacklist=0 \\
+    -MaxConnections=${MAX_VNC_CONNECTIONS} \\
     -Log "*:stderr:30"
 RUNXVNC
 chmod +x /usr/local/bin/run-xvnc.sh

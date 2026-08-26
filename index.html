@@ -17,7 +17,10 @@ body{font-family:'SF Mono','Cascadia Code','Fira Code',monospace;background:var(
 #sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
 .header .logo{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
-.header .status{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 2s infinite}
+.header .conn-badge{font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(34,197,94,.15);color:var(--green);font-weight:600;border:1px solid rgba(34,197,94,.3);margin-left:auto;white-space:nowrap}
+.header .conn-badge.warn{background:rgba(245,158,11,.15);color:var(--amber);border-color:rgba(245,158,11,.3)}
+.header .conn-badge.full{background:rgba(239,68,68,.15);color:var(--red);border-color:rgba(239,68,68,.3)}
+.header .status{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 2s infinite}
 .header .status.ok{background:var(--green)}
 .header .status.bad{background:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -186,6 +189,7 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
 <div id="sidebar">
   <div class="header">
     <span class="logo">Linux Desktop</span>
+    <span class="conn-badge" id="conn-badge" title="Ket noi VNC">0/3</span>
     <span class="status" id="hdr-status"></span>
   </div>
 
@@ -284,6 +288,16 @@ body.menu-open #sidebar{display:flex;position:fixed;z-index:100;height:100%;left
         <option value="save">Tiet kiem mang</option>
       </select>
     </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+      Ket noi
+    </div>
+    <div class="stat-row"><span class="stat-label">Trang thai</span><span class="stat-value ok" id="conn-state">Dang ket noi...</span></div>
+    <div class="stat-row"><span class="stat-label">Dang mo</span><span class="stat-value" id="conn-count">0 / 3</span></div>
+    <div class="stat-row"><span class="stat-label">IP</span><span class="stat-value" id="conn-ip">--</span></div>
   </div>
 
   <div class="section">
@@ -1768,6 +1782,35 @@ function openVncClient(){
     note.textContent='App VNC noi thang qua RFB - khong qua trinh duyet, do tre thap hon noVNC. Nhieu client cung luc van OK (shared session).';
   });
 }
+
+/* ================= CONNECTION TRACKING ================= */
+function fetchConnections(){
+  reqJSON('GET','/api/vnc/connections',null,function(err,j){
+    if(err||!j)return;
+    var badge=$('conn-badge');
+    var total=j.total||0;
+    var max=j.max||3;
+    badge.textContent=total+'/'+max;
+    badge.className='conn-badge'+(total>=max?' full':total>=max-1?' warn':'');
+    var countEl=$('conn-count');
+    if(countEl)countEl.textContent=total+' / '+max;
+    var stateEl=$('conn-state');
+    if(stateEl){
+      if(total===0)stateEl.textContent='Chua co ket noi';
+      else if(total===1)stateEl.textContent='1 nguoi dung';
+      else stateEl.textContent=total+' nguoi dung';
+    }
+    /* show client IPs */
+    if(j.connections&&j.connections.length){
+      var ips=[];
+      j.connections.forEach(function(c){if(c.ip&&ips.indexOf(c.ip)===-1)ips.push(c.ip)});
+      var ipEl=$('conn-ip');
+      if(ipEl)ipEl.textContent=ips.join(', ')||'--';
+    }
+  });
+}
+setInterval(fetchConnections,5000);
+fetchConnections();
 
 /* init */
 $('img-quality').value=curImgKey();

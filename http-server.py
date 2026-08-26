@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 import traceback
+from functools import lru_cache
 
 import aiohttp
 import psutil
@@ -68,6 +69,9 @@ PRESET_DIR = os.path.join(WALLPAPER_DIR, "presets")
 WALLPAPER_GEN = "/usr/local/bin/wallpaper-gen.py"
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
+# Maximum concurrent VNC connections per session
+MAX_VNC_CONNECTIONS = _env_int("MAX_VNC_CONNECTIONS", 3)
+
 # name -> (r1,g1,b1,r2,g2,b2) gradient presets ("sinh dong")
 WALLPAPER_PRESETS = {
     "midnight": (10, 14, 23, 30, 41, 59),
@@ -84,6 +88,10 @@ VNC_IDLE_TIMEOUT = _env_int("VNC_IDLE_TIMEOUT", 30)
 BOOT_GRACE_SEC = _env_int("BOOT_GRACE_SEC", 240)
 PROCESS_START = time.time()
 
+# Connection tracking for multi-user support
+vnc_connections = {}
+vnc_connections_lock = asyncio.Lock()
+
 stats_cache = {"data": None, "ts": 0}
 health_cache = {"data": None, "ts": 0}
 client_session: aiohttp.ClientSession = None
@@ -93,7 +101,18 @@ MB = 1024 * 1024
 
 # ---------------------------------------------------------------- utilities
 
+@lru_cache(maxsize=256)
+def _read_int_cached(path, _cache_time=0):
+    """Cached version of _read_int for frequently accessed files."""
+    try:
+        with open(path) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
 def _read_int(path):
+    """Read an integer from a file."""
     try:
         with open(path) as f:
             return int(f.read().strip())
@@ -164,6 +183,23 @@ def desktop_session_proc():
     """Process name of the running desktop session (DESKTOP env)."""
     return {"xfce": "xfce4-session", "lxqt": "lxqt-session"}.get(
         os.environ.get("DESKTOP", "lxqt"), "lxqt-session")
+
+
+async def track_vnc_connection(ws_id, client_info, add=True):
+    """Track VNC connections for multi-user support."""
+    async with vnc_connections_lock:
+        if add:
+            vnc_connections[ws_id] = {
+                "client": client_info,
+                "connected_at": time.time(),
+                "last_active": time.time()
+            }
+            log.info(f"VNC connection added: {ws_id} (total: {len(vnc_connections)})")
+        else:
+            if ws_id in vnc_connections:
+                del vnc_connections[ws_id]
+                log.info(f"VNC connection removed: {ws_id} (total: {len(vnc_connections)})")
+    return len(vnc_connections)
 
 
 HOP_HEADERS = {
@@ -286,6 +322,8 @@ async def handle_health(request):
         "uptime_seconds": uptime_s,
         "uptime": f"{d}d {h2}h {m2}m {s}s" if d else f"{h2}h {m2}m {s}s",
         "timestamp": int(now),
+        "vnc_connections": len(vnc_connections),
+        "max_vnc_connections": MAX_VNC_CONNECTIONS,
     }
 
     status_code = 503 if overall == "unhealthy" else 200
@@ -480,6 +518,25 @@ async def handle_services(request):
     return web.json_response({"services": services})
 
 
+async def vnc_connections_list(request):
+    """List active VNC connections."""
+    async with vnc_connections_lock:
+        connections = []
+        for ws_id, info in vnc_connections.items():
+            connections.append({
+                "id": ws_id,
+                "ip": info["client"]["ip"],
+                "connected_at": info["connected_at"],
+                "last_active": info["last_active"],
+                "uptime": int(time.time() - info["connected_at"])
+            })
+    return web.json_response({
+        "connections": connections,
+        "total": len(connections),
+        "max": MAX_VNC_CONNECTIONS
+    })
+
+
 # ---------------------------------------------------------------- static
 
 async def handle_novnc(request):
@@ -644,7 +701,27 @@ async def vnc_ws_handler(request):
       the page before Xvnc is up does NOT hard-fail.
     - Closes cleanly on either side EOF; no infinite hang (heartbeat +
       connect deadline).
+    - Supports multiple concurrent connections with connection tracking.
     """
+    # Generate unique connection ID
+    ws_id = f"ws_{int(time.time() * 1000)}_{id(request)}"
+    client_info = {
+        "ip": request.remote or "unknown",
+        "user_agent": request.headers.get("User-Agent", "unknown")
+    }
+    
+    # Check connection limit
+    current_connections = await track_vnc_connection(ws_id, client_info, add=True)
+    if current_connections > MAX_VNC_CONNECTIONS:
+        log.warning(f"VNC connection limit reached ({current_connections}/{MAX_VNC_CONNECTIONS})")
+        await track_vnc_connection(ws_id, client_info, add=False)
+        ws_server = web.WebSocketResponse()
+        await ws_server.prepare(request)
+        await ws_server.close(code=1013, message=b"connection limit reached")
+        return ws_server
+    
+    log.info(f"VNC client connected: {client_info['ip']} (total: {current_connections}/{MAX_VNC_CONNECTIONS})")
+    
     ws_server = web.WebSocketResponse(max_msg_size=0, compress=False,
                                       heartbeat=15, autoping=True)
     await ws_server.prepare(request)
@@ -662,6 +739,7 @@ async def vnc_ws_handler(request):
             last_err = type(e).__name__
             if ws_server.closed or time.time() >= deadline:
                 log.warning("VNC connect failed after retries: %s", last_err)
+                await track_vnc_connection(ws_id, client_info, add=False)
                 try:
                     await ws_server.close(code=1013,
                                           message=b"vnc not available")
@@ -671,11 +749,17 @@ async def vnc_ws_handler(request):
             try:
                 await asyncio.sleep(2)
             except asyncio.CancelledError:
+                await track_vnc_connection(ws_id, client_info, add=False)
                 return ws_server
 
     async def client_to_vnc():
         try:
             async for msg in ws_server:
+                # Update last active time
+                async with vnc_connections_lock:
+                    if ws_id in vnc_connections:
+                        vnc_connections[ws_id]["last_active"] = time.time()
+                
                 if msg.type == web.WSMsgType.TEXT:
                     writer.write(msg.data.encode())
                 elif msg.type == web.WSMsgType.BINARY:
@@ -721,6 +805,10 @@ async def vnc_ws_handler(request):
         await writer.wait_closed()
     except Exception:
         pass
+    
+    # Remove connection from tracking
+    await track_vnc_connection(ws_id, client_info, add=False)
+    
     if not ws_server.closed:
         try:
             await ws_server.close(code=1000, message=b"session ended")
@@ -1571,6 +1659,7 @@ app.router.add_get("/api/stats", handle_stats)
 app.router.add_get("/api/session", handle_session)
 app.router.add_get("/api/vnc/client", vnc_client_info)
 app.router.add_get("/api/services", handle_services)
+app.router.add_get("/api/vnc/connections", vnc_connections_list)
 app.router.add_post("/api/start/code-server", start_code_server)
 app.router.add_get("/api/start/code-server", start_code_server)
 app.router.add_post("/api/apps/{name}", launch_app)
